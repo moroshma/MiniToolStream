@@ -1,0 +1,15 @@
+services:
+  tarantool:
+    image: tarantool/tarantool:2.11
+    container_name: minitoolstream-tarantool
+    ports:
+      - "3301:3301"
+    volumes:
+      - ./init.lua:/opt/tarantool/app.lua:ro
+      - tarantool-data:/var/lib/tarantool
+    command: ["tarantool", "/opt/tarantool/app.lua"]
+    restart: unless-stopped
+
+volumes:
+  tarantool-data:
+    driver: local

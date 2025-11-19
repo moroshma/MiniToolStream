@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package subscription;
+
+option go_package = "./;subscription";
+
+// Определение сервиса подписки
+service SubscriptionService {
+  // Server Streaming RPC:
+  // Клиент отправляет один запрос (SubscribeRequest),
+  // а сервер отвечает потоком (stream) сообщений (UpdateResponse).
+  rpc Subscribe(SubscribeRequest) returns (stream UpdateResponse);
+}
+
+// Запрос от клиента для начала подписки
+message SubscribeRequest {
+  string topic = 1; // Например, тема подписки
+}
+
+// Сообщение, отправляемое сервером клиенту
+message UpdateResponse {
+  int32 count = 1;      // Счетчик сообщения
+  string message = 2;   // Само сообщение
+}
