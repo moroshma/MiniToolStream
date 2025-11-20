@@ -1,0 +1,5 @@
+publisher_client
+*.jpeg
+*.jpg
+*.png
+create_test_image.sh

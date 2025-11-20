@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package minitoolstream;
 
-option go_package = "github.com/your-org/minitoolstream/gen/go;minitoolstream";
+option go_package = "github.com/moroshma/MiniToolStream/gen/minitoolstream;minitoolstream";
 
 service IngressService {
   rpc Publish(PublishRequest) returns (PublishResponse);
@@ -16,6 +16,7 @@ message PublishRequest {
 
 message PublishResponse {
   uint64 sequence = 1;
-  int64 StatusCode = 2;
-  string ResponderError = 3;
+  string object_name = 2;
+  int64 status_code = 3;
+  string error_message = 4;
 }

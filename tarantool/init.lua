@@ -29,17 +29,16 @@ box.once('init', function()
 
     -- Space 1: message
     -- Stores metadata about each message in the stream
-    -- Now supports MessagePack encoded data storage
+    -- object_name is auto-generated as {{subject}}_{{sequence}} and used as MinIO/S3 key
     local message = box.schema.space.create('message', {
         if_not_exists = true,
         engine = 'memtx',
         format = {
             {name = 'sequence', type = 'unsigned'},      -- Unique message number (PK)
-            {name = 'headers', type = 'map'},            -- Message headers (metadata)
-            {name = 'object_name', type = 'string'},     -- S3/MinIO object key (optional, for large payloads)
+            {name = 'headers', type = 'any'},            -- Message headers (metadata) - any to handle msgpack encoding
+            {name = 'object_name', type = 'string'},     -- Auto-generated S3/MinIO object key
             {name = 'subject', type = 'string'},         -- Topic/channel name
-            {name = 'create_at', type = 'unsigned'},     -- Unix timestamp for TTL
-            {name = 'data_msgpack', type = 'scalar', is_nullable = true}  -- MessagePack encoded payload (binary data)
+            {name = 'create_at', type = 'unsigned'}      -- Unix timestamp for TTL
         }
     })
 
@@ -128,44 +127,36 @@ function get_next_sequence()
     return global_sequence
 end
 
--- Function to publish a message (legacy - for backward compatibility)
+-- Function to publish a message
 -- @param subject string - topic/channel name
--- @param object_name string - MinIO object key
 -- @param headers table - map of headers (metadata)
 -- @return sequence number of the published message
-function publish_message(subject, object_name, headers)
+function publish_message(subject, headers)
     local sequence = get_next_sequence()
     local create_at = os.time()
 
+    -- Auto-generate object_name as {{subject}}_{{sequence}}
+    local object_name = subject .. "_" .. sequence
+
+    -- Normalize headers: convert array to map if needed
+    local normalized_headers
+    if headers == nil or (type(headers) == 'table' and #headers == 0 and next(headers) == nil) then
+        -- Empty or nil - create an empty map explicitly
+        normalized_headers = {}
+    elseif type(headers) == 'table' and #headers > 0 then
+        -- It's an array, convert to map (should not happen but handle it)
+        normalized_headers = {}
+    else
+        -- It's already a proper map
+        normalized_headers = headers
+    end
+
     box.space.message:insert({
         sequence,
-        headers or {},
+        normalized_headers,
         object_name,
         subject,
-        create_at,
-        nil  -- data_msgpack is null for legacy API
-    })
-
-    return sequence
-end
-
--- Function to publish a message with MessagePack data
--- @param subject string - topic/channel name
--- @param data_msgpack string - MessagePack encoded binary data
--- @param headers table - map of headers (metadata)
--- @param object_name string - MinIO object key (optional, for large payloads)
--- @return sequence number of the published message
-function publish_message_msgpack(subject, data_msgpack, headers, object_name)
-    local sequence = get_next_sequence()
-    local create_at = os.time()
-
-    box.space.message:insert({
-        sequence,
-        headers or {},
-        object_name or "",  -- empty string if not using MinIO
-        subject,
-        create_at,
-        data_msgpack
+        create_at
     })
 
     return sequence
@@ -178,10 +169,10 @@ function get_message_by_sequence(sequence)
     return box.space.message:get(sequence)
 end
 
--- Function to get message by sequence with MessagePack data decoded
+-- Function to get message by sequence with fields decoded
 -- Returns message as a table with all fields named
 -- @param sequence uint64 - message sequence number
--- @return table {sequence, headers, object_name, subject, create_at, data_msgpack} or nil
+-- @return table {sequence, headers, object_name, subject, create_at} or nil
 function get_message_by_sequence_decoded(sequence)
     local tuple = box.space.message:get(sequence)
     if tuple == nil then
@@ -193,8 +184,7 @@ function get_message_by_sequence_decoded(sequence)
         headers = tuple[2],
         object_name = tuple[3],
         subject = tuple[4],
-        create_at = tuple[5],
-        data_msgpack = tuple[6]  -- still binary, but accessible by name
+        create_at = tuple[5]
     }
 end
 
@@ -298,160 +288,6 @@ function delete_old_messages(ttl_seconds)
     return deleted_count, deleted_messages
 end
 
--- ==============================================================================
--- Additional functions for gRPC API support
--- ==============================================================================
-
--- Function for IngressService.Publish (legacy - using MinIO)
--- Publishes a message and returns sequence with status
--- @param subject string - topic/channel name
--- @param object_name string - MinIO object key (or data identifier)
--- @param headers table - map of headers (metadata)
--- @return table {sequence, status_code, error_message}
-function grpc_publish(subject, object_name, headers)
-    local success, result = pcall(function()
-        local sequence = get_next_sequence()
-        local create_at = os.time()
-
-        box.space.message:insert({
-            sequence,
-            headers or {},
-            object_name,
-            subject,
-            create_at,
-            nil  -- no msgpack data
-        })
-
-        return sequence
-    end)
-
-    if success then
-        return {
-            sequence = result,
-            status_code = 0,
-            error_message = nil
-        }
-    else
-        return {
-            sequence = 0,
-            status_code = 1,
-            error_message = tostring(result)
-        }
-    end
-end
-
--- Function for IngressService.Publish with MessagePack
--- Publishes a message with MessagePack encoded data
--- @param subject string - topic/channel name
--- @param data_msgpack string - MessagePack encoded binary data (from protobuf bytes)
--- @param headers table - map of headers (metadata)
--- @return table {sequence, status_code, error_message}
-function grpc_publish_msgpack(subject, data_msgpack, headers)
-    local success, result = pcall(function()
-        local sequence = get_next_sequence()
-        local create_at = os.time()
-
-        -- Validate that data_msgpack is provided
-        if not data_msgpack or #data_msgpack == 0 then
-            error("data_msgpack is required and cannot be empty")
-        end
-
-        box.space.message:insert({
-            sequence,
-            headers or {},
-            "",  -- no object_name when using inline data
-            subject,
-            create_at,
-            data_msgpack
-        })
-
-        return sequence
-    end)
-
-    if success then
-        return {
-            sequence = result,
-            status_code = 0,
-            error_message = nil
-        }
-    else
-        return {
-            sequence = 0,
-            status_code = 1,
-            error_message = tostring(result)
-        }
-    end
-end
-
--- Function for EgressService.Fetch
--- Fetches batch of messages for a consumer and optionally updates position
--- @param subject string - topic name
--- @param durable_name string - consumer group name
--- @param batch_size number - max messages to fetch
--- @param auto_ack boolean - automatically update consumer position (default: false)
--- @return array of message tuples
-function grpc_fetch(subject, durable_name, batch_size, auto_ack)
-    -- Get current consumer position
-    local current_pos = get_consumer_position(durable_name, subject)
-    local start_sequence = current_pos + 1
-
-    -- Fetch messages
-    local messages = get_messages_by_subject(subject, start_sequence, batch_size)
-
-    -- Auto-acknowledge: update position to last fetched message
-    if auto_ack and #messages > 0 then
-        local last_message = messages[#messages]
-        local last_seq = last_message[1]
-        update_consumer_position(durable_name, subject, last_seq)
-    end
-
-    return messages
-end
-
--- Function for EgressService.Fetch with MessagePack support
--- Returns messages as array of structured tables (easier to work with)
--- @param subject string - topic name
--- @param durable_name string - consumer group name
--- @param batch_size number - max messages to fetch
--- @param auto_ack boolean - automatically update consumer position (default: false)
--- @return array of message tables {sequence, headers, object_name, subject, create_at, data_msgpack}
-function grpc_fetch_msgpack(subject, durable_name, batch_size, auto_ack)
-    -- Get current consumer position
-    local current_pos = get_consumer_position(durable_name, subject)
-    local start_sequence = current_pos + 1
-
-    -- Fetch messages
-    local tuples = get_messages_by_subject(subject, start_sequence, batch_size)
-
-    -- Convert tuples to structured tables
-    local messages = {}
-    for _, tuple in ipairs(tuples) do
-        table.insert(messages, {
-            sequence = tuple[1],
-            headers = tuple[2],
-            object_name = tuple[3],
-            subject = tuple[4],
-            create_at = tuple[5],
-            data_msgpack = tuple[6]  -- MessagePack binary data
-        })
-    end
-
-    -- Auto-acknowledge: update position to last fetched message
-    if auto_ack and #messages > 0 then
-        local last_seq = messages[#messages].sequence
-        update_consumer_position(durable_name, subject, last_seq)
-    end
-
-    return messages
-end
-
--- Function for EgressService.GetLastSequence
--- Already exists as get_latest_sequence_for_subject, but adding alias for clarity
-function grpc_get_last_sequence(subject)
-    return {
-        last_sequence = get_latest_sequence_for_subject(subject)
-    }
-end
 
 -- Function to get new messages count since consumer position
 -- Useful for Subscribe notifications
@@ -499,24 +335,6 @@ function check_new_messages(subject, consumer_group)
     }
 end
 
--- Function to acknowledge (commit) message consumption
--- Updates consumer position to specific sequence
--- @param durable_name string - consumer group name
--- @param subject string - topic name
--- @param sequence uint64 - sequence to acknowledge up to (inclusive)
--- @return boolean - success
-function grpc_ack(durable_name, subject, sequence)
-    local current_pos = get_consumer_position(durable_name, subject)
-
-    -- Only update if new sequence is greater
-    if sequence > current_pos then
-        update_consumer_position(durable_name, subject, sequence)
-        return true
-    end
-
-    return false
-end
-
 -- Function to get message count in a subject
 -- @param subject string - topic name
 -- @return uint64 - total message count for subject
@@ -527,23 +345,6 @@ function get_subject_message_count(subject)
     end
     return count
 end
-
--- Function to peek next messages without updating consumer position
--- Useful for previewing messages before committing
--- @param subject string - topic name
--- @param durable_name string - consumer group name
--- @param batch_size number - max messages to peek
--- @return array of message tuples
-function grpc_peek(subject, durable_name, batch_size)
-    local current_pos = get_consumer_position(durable_name, subject)
-    local start_sequence = current_pos + 1
-
-    return get_messages_by_subject(subject, start_sequence, batch_size)
-end
-
--- ==============================================================================
--- End of gRPC API support functions
--- ==============================================================================
 
 -- Create user for application access
 box.once('create_app_user', function()
