@@ -321,11 +321,11 @@ end
 -- Function to check if new messages are available
 -- Useful for Subscribe stream to notify about new messages
 -- @param subject string - topic name
--- @param consumer_group string - consumer group name
+-- @param durable_name string - durable consumer name
 -- @return table {has_new, latest_sequence, consumer_position}
-function check_new_messages(subject, consumer_group)
+function check_new_messages(subject, durable_name)
     local latest_seq = get_latest_sequence_for_subject(subject)
-    local consumer_pos = get_consumer_position(consumer_group, subject)
+    local consumer_pos = get_consumer_position(durable_name, subject)
 
     return {
         has_new = latest_seq > consumer_pos,

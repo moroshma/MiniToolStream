@@ -16,7 +16,7 @@ service EgressService {
 message SubscribeRequest {
   string subject = 1;
   optional uint64 start_sequence = 2;
-  string consumer_group = 3;
+  string durable_name = 3;
 }
 
 message Notification {
@@ -46,6 +46,3 @@ message Message {
   map<string, string> headers = 4;
   google.protobuf.Timestamp timestamp = 5;
 }
-
-// диаграмма развёртывания + докинуть потенциал для метрик
-//

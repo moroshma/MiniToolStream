@@ -2,7 +2,7 @@
 // versions:
 // 	protoc-gen-go v1.36.8
 // 	protoc        v6.30.2
-// source: model/publish.proto
+// source: publish.proto
 
 package minitoolstream
 
@@ -32,7 +32,7 @@ type PublishRequest struct {
 
 func (x *PublishRequest) Reset() {
 	*x = PublishRequest{}
-	mi := &file_model_publish_proto_msgTypes[0]
+	mi := &file_publish_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -44,7 +44,7 @@ func (x *PublishRequest) String() string {
 func (*PublishRequest) ProtoMessage() {}
 
 func (x *PublishRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_model_publish_proto_msgTypes[0]
+	mi := &file_publish_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -57,7 +57,7 @@ func (x *PublishRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PublishRequest.ProtoReflect.Descriptor instead.
 func (*PublishRequest) Descriptor() ([]byte, []int) {
-	return file_model_publish_proto_rawDescGZIP(), []int{0}
+	return file_publish_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *PublishRequest) GetSubject() string {
@@ -93,7 +93,7 @@ type PublishResponse struct {
 
 func (x *PublishResponse) Reset() {
 	*x = PublishResponse{}
-	mi := &file_model_publish_proto_msgTypes[1]
+	mi := &file_publish_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -105,7 +105,7 @@ func (x *PublishResponse) String() string {
 func (*PublishResponse) ProtoMessage() {}
 
 func (x *PublishResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_model_publish_proto_msgTypes[1]
+	mi := &file_publish_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -118,7 +118,7 @@ func (x *PublishResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PublishResponse.ProtoReflect.Descriptor instead.
 func (*PublishResponse) Descriptor() ([]byte, []int) {
-	return file_model_publish_proto_rawDescGZIP(), []int{1}
+	return file_publish_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *PublishResponse) GetSequence() uint64 {
@@ -149,11 +149,11 @@ func (x *PublishResponse) GetErrorMessage() string {
 	return ""
 }
 
-var File_model_publish_proto protoreflect.FileDescriptor
+var File_publish_proto protoreflect.FileDescriptor
 
-const file_model_publish_proto_rawDesc = "" +
+const file_publish_proto_rawDesc = "" +
 	"\n" +
-	"\x13model/publish.proto\x12\x0eminitoolstream\"\xc1\x01\n" +
+	"\rpublish.proto\x12\x0eminitoolstream\"\xc1\x01\n" +
 	"\x0ePublishRequest\x12\x18\n" +
 	"\asubject\x18\x01 \x01(\tR\asubject\x12\x12\n" +
 	"\x04data\x18\x02 \x01(\fR\x04data\x12E\n" +
@@ -172,24 +172,24 @@ const file_model_publish_proto_rawDesc = "" +
 	"\aPublish\x12\x1e.minitoolstream.PublishRequest\x1a\x1f.minitoolstream.PublishResponseBFZDgithub.com/moroshma/MiniToolStream/gen/minitoolstream;minitoolstreamb\x06proto3"
 
 var (
-	file_model_publish_proto_rawDescOnce sync.Once
-	file_model_publish_proto_rawDescData []byte
+	file_publish_proto_rawDescOnce sync.Once
+	file_publish_proto_rawDescData []byte
 )
 
-func file_model_publish_proto_rawDescGZIP() []byte {
-	file_model_publish_proto_rawDescOnce.Do(func() {
-		file_model_publish_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_model_publish_proto_rawDesc), len(file_model_publish_proto_rawDesc)))
+func file_publish_proto_rawDescGZIP() []byte {
+	file_publish_proto_rawDescOnce.Do(func() {
+		file_publish_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_publish_proto_rawDesc), len(file_publish_proto_rawDesc)))
 	})
-	return file_model_publish_proto_rawDescData
+	return file_publish_proto_rawDescData
 }
 
-var file_model_publish_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
-var file_model_publish_proto_goTypes = []any{
+var file_publish_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_publish_proto_goTypes = []any{
 	(*PublishRequest)(nil),  // 0: minitoolstream.PublishRequest
 	(*PublishResponse)(nil), // 1: minitoolstream.PublishResponse
 	nil,                     // 2: minitoolstream.PublishRequest.HeadersEntry
 }
-var file_model_publish_proto_depIdxs = []int32{
+var file_publish_proto_depIdxs = []int32{
 	2, // 0: minitoolstream.PublishRequest.headers:type_name -> minitoolstream.PublishRequest.HeadersEntry
 	0, // 1: minitoolstream.IngressService.Publish:input_type -> minitoolstream.PublishRequest
 	1, // 2: minitoolstream.IngressService.Publish:output_type -> minitoolstream.PublishResponse
@@ -200,26 +200,26 @@ var file_model_publish_proto_depIdxs = []int32{
 	0, // [0:1] is the sub-list for field type_name
 }
 
-func init() { file_model_publish_proto_init() }
-func file_model_publish_proto_init() {
-	if File_model_publish_proto != nil {
+func init() { file_publish_proto_init() }
+func file_publish_proto_init() {
+	if File_publish_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_model_publish_proto_rawDesc), len(file_model_publish_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_publish_proto_rawDesc), len(file_publish_proto_rawDesc)),
 			NumEnums:      0,
 			NumMessages:   3,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
-		GoTypes:           file_model_publish_proto_goTypes,
-		DependencyIndexes: file_model_publish_proto_depIdxs,
-		MessageInfos:      file_model_publish_proto_msgTypes,
+		GoTypes:           file_publish_proto_goTypes,
+		DependencyIndexes: file_publish_proto_depIdxs,
+		MessageInfos:      file_publish_proto_msgTypes,
 	}.Build()
-	File_model_publish_proto = out.File
-	file_model_publish_proto_goTypes = nil
-	file_model_publish_proto_depIdxs = nil
+	File_publish_proto = out.File
+	file_publish_proto_goTypes = nil
+	file_publish_proto_depIdxs = nil
 }

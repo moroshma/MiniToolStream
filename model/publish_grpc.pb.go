@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.5.1
 // - protoc             v6.30.2
-// source: model/publish.proto
+// source: publish.proto
 
 package minitoolstream
 
@@ -47,7 +47,7 @@ func (c *ingressServiceClient) Publish(ctx context.Context, in *PublishRequest, 
 	return out, nil
 }
 
-// IngressServiceServer is the app API for IngressService service.
+// IngressServiceServer is the server API for IngressService service.
 // All implementations must embed UnimplementedIngressServiceServer
 // for forward compatibility.
 type IngressServiceServer interface {
@@ -117,5 +117,5 @@ var IngressService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "model/publish.proto",
+	Metadata: "publish.proto",
 }
