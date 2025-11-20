@@ -197,7 +197,7 @@ function get_messages_by_subject(subject, start_sequence, limit)
     local messages = {}
     local count = 0
 
-    for _, tuple in box.space.message.index.subject_sequence:pairs({subject, start_sequence}) do
+    for _, tuple in box.space.message.index.subject_sequence:pairs({subject, start_sequence}, {iterator = 'GE'}) do
         if tuple[4] ~= subject then
             break
         end

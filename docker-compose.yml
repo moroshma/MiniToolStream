@@ -1,5 +1,4 @@
 services:
-  # Tarantool - In-memory database for message metadata
   tarantool:
     image: tarantool/tarantool:2.11
     container_name: minitoolstream-tarantool
