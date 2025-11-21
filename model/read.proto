@@ -1,0 +1,48 @@
+syntax = "proto3";
+
+package minitoolstream;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/moroshma/minitoolstream/gen/go;minitoolstream";
+
+// Сервис для выдачи (чтения) сообщений
+service EgressService {
+  rpc Subscribe(SubscribeRequest) returns (stream Notification);
+  rpc Fetch(FetchRequest) returns (stream Message);
+  rpc GetLastSequence(GetLastSequenceRequest) returns (GetLastSequenceResponse);
+}
+
+message SubscribeRequest {
+  string subject = 1;
+  optional uint64 start_sequence = 2;
+  string durable_name = 3;
+}
+
+message Notification {
+  string subject = 1;
+  // последний сиквенс доступный для чтения
+  uint64 sequence = 2;
+}
+
+message FetchRequest {
+  string subject = 1;
+  string durable_name = 2;
+  int32 batch_size = 3;
+}
+
+message GetLastSequenceRequest {
+  string subject = 1;
+}
+
+message GetLastSequenceResponse {
+  uint64 last_sequence = 1;
+}
+
+message Message {
+  string subject = 1;
+  uint64 sequence = 2;
+  bytes data = 3;
+  map<string, string> headers = 4;
+  google.protobuf.Timestamp timestamp = 5;
+}

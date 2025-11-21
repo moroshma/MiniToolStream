@@ -1,0 +1,42 @@
+@startuml
+title MiniToolStream - Последовательность публикации (Pull-модель)
+
+actor Producer
+participant "Client SDK" as SDK
+participant "IngressService" as Ingress
+participant "MinioRepository" as Minio
+participant "TarantoolRepository" as Tarantool
+
+activate Producer
+Producer -> SDK: Publish("my-topic", data)
+activate SDK
+
+SDK -> Ingress: gRPC: Publish(topic, data)
+activate Ingress
+
+Ingress -> Tarantool: SaveMetadata(topic, metadata)
+activate Tarantool
+note right: Сначала резервируем место и получаем sequence
+Tarantool --> Ingress: newSequence, tempMetadata
+deactivate Tarantool
+
+Ingress -> Minio: UploadObject(data)
+activate Minio
+Minio --> Ingress: objectPath
+deactivate Minio
+
+Ingress -> Tarantool: UpdateMetadata(tempMetadata, objectPath)
+activate Tarantool
+note right: Обновляем запись, добавляя ссылку на MinIO
+Tarantool --> Ingress
+deactivate Tarantool
+
+
+Ingress --> SDK: gRPC: PublishResponse{sequence}
+deactivate Ingress
+
+SDK --> Producer: Ack{sequence}
+deactivate SDK
+deactivate Producer
+
+@enduml

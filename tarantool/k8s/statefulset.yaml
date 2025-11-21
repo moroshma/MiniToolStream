@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: tarantool
+  namespace: minitoolstream
+spec:
+  serviceName: tarantool
+  replicas: 1  # Один standalone pod
+  selector:
+    matchLabels:
+      app: tarantool
+  template:
+    metadata:
+      labels:
+        app: tarantool
+    spec:
+      containers:
+      - name: tarantool
+        image: tarantool/tarantool:2.11
+        ports:
+        - containerPort: 3301
+          name: tarantool
+        volumeMounts:
+        - name: tarantool-data
+          mountPath: /var/lib/tarantool
+        - name: init-script
+          mountPath: /app
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            echo "Starting Tarantool 2.11 (standalone mode)"
+            exec tarantool /app/init.lua
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          tcpSocket:
+            port: 3301
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+        readinessProbe:
+          tcpSocket:
+            port: 3301
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+      volumes:
+      - name: init-script
+        configMap:
+          name: tarantool-init
+  volumeClaimTemplates:
+  - metadata:
+      name: tarantool-data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 5Gi

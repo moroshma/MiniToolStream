@@ -1,0 +1,34 @@
+# MiniToolStream Egress Configuration Example
+
+server:
+  port: 50052
+  poll_interval: 1s
+
+tarantool:
+  address: localhost:3301
+  user: minitoolstream
+  password: changeme
+  timeout: 5s
+  # Optional: Load credentials from Vault
+  # vault_path: minitoolstream/tarantool
+
+minio:
+  endpoint: localhost:9000
+  access_key_id: minioadmin
+  secret_access_key: minioadmin
+  use_ssl: false
+  bucket_name: minitoolstream
+  # Optional: Load credentials from Vault
+  # vault_path: minitoolstream/minio
+
+vault:
+  enabled: false
+  address: http://localhost:8200
+  # token: your-vault-token
+  # token_path: /var/run/secrets/vault/token
+  # namespace: your-namespace
+
+logger:
+  level: info        # debug, info, warn, error
+  format: json       # json or console
+  output_path: stdout # stdout, stderr, or file path

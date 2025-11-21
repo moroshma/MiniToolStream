@@ -1,0 +1,267 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tarantool-init
+  namespace: minitoolstream
+data:
+  init.lua: |
+    -- MiniToolStream Tarantool 2.11 initialization script
+    -- Stores message metadata and sequence numbers
+    
+    -- Configure Tarantool
+    -- Note: In Docker, some options are already set by entrypoint
+    box.cfg {
+        -- Memory settings
+        memtx_memory = 1024 * 1024 * 1024, -- 1GB
+    
+        -- WAL (Write-Ahead Log) settings for durability
+        wal_mode = 'write',           -- fsync after each write (most durable)
+        wal_dir_rescan_delay = 2,     -- rescan wal_dir every 2 seconds
+    
+        -- Logging
+        log_level = 5
+    }
+    
+    print('MiniToolStream: Starting initialization...')
+    
+    -- Wait for database to be ready
+    box.once('init', function()
+        print('MiniToolStream: Running box.once init...')
+    
+        -- Space 1: message
+        -- Stores metadata about each message in the stream
+        local message = box.schema.space.create('message', {
+            if_not_exists = true,
+            engine = 'memtx',
+            format = {
+                {name = 'sequence', type = 'unsigned'},      -- Unique message number (PK)
+                {name = 'headers', type = 'map'},            -- Message headers (metadata)
+                {name = 'object_name', type = 'string'},     -- S3/MinIO object key
+                {name = 'subject', type = 'string'},         -- Topic/channel name
+                {name = 'create_at', type = 'unsigned'}      -- Unix timestamp for TTL
+            }
+        })
+    
+        -- Primary index: sequence (unique, globally incrementing)
+        message:create_index('primary', {
+            parts = {'sequence'},
+            if_not_exists = true,
+            unique = true,
+            type = 'TREE'
+        })
+    
+        -- Secondary index: by subject (for filtering by topic)
+        message:create_index('subject', {
+            parts = {'subject'},
+            if_not_exists = true,
+            unique = false,
+            type = 'TREE'
+        })
+    
+        -- Secondary index: by subject + sequence (for range queries)
+        message:create_index('subject_sequence', {
+            parts = {'subject', 'sequence'},
+            if_not_exists = true,
+            unique = true,
+            type = 'TREE'
+        })
+    
+        -- Secondary index: by create_at (for TTL cleanup)
+        message:create_index('create_at', {
+            parts = {'create_at'},
+            if_not_exists = true,
+            unique = false,
+            type = 'TREE'
+        })
+    
+        -- Space 2: consumers
+        -- Stores state (read position) for each durable consumer
+        local consumers = box.schema.space.create('consumers', {
+            if_not_exists = true,
+            engine = 'memtx',
+            format = {
+                {name = 'durable_name', type = 'string'},    -- Consumer group name (part of composite PK)
+                {name = 'subject', type = 'string'},         -- Topic subscribed to (part of composite PK)
+                {name = 'last_sequence', type = 'unsigned'}  -- Last read message sequence
+            }
+        })
+    
+        -- Primary index: composite key (durable_name, subject)
+        consumers:create_index('primary', {
+            parts = {'durable_name', 'subject'},
+            if_not_exists = true,
+            unique = true,
+            type = 'TREE'
+        })
+    
+        -- Secondary index: by subject (for finding all consumers of a topic)
+        consumers:create_index('subject', {
+            parts = {'subject'},
+            if_not_exists = true,
+            unique = false,
+            type = 'TREE'
+        })
+    
+        print('MiniToolStream: Spaces and indexes created successfully')
+    end)
+    
+    -- Global sequence counter (in-memory, atomically incremented)
+    local global_sequence = 0
+    
+    -- Initialize global sequence from existing data
+    box.once('init_global_sequence', function()
+        local max_seq = box.space.message.index.primary:max()
+        if max_seq ~= nil then
+            global_sequence = max_seq[1]
+        end
+        print('MiniToolStream: Global sequence initialized to ' .. global_sequence)
+    end)
+    
+    -- Function to get next global sequence (thread-safe)
+    function get_next_sequence()
+        global_sequence = global_sequence + 1
+        return global_sequence
+    end
+    
+    -- Function to publish a message
+    -- @param subject string - topic/channel name
+    -- @param object_name string - MinIO object key
+    -- @param headers table - map of headers (metadata)
+    -- @return sequence number of the published message
+    function publish_message(subject, object_name, headers)
+        local sequence = get_next_sequence()
+        local create_at = os.time()
+    
+        box.space.message:insert({
+            sequence,
+            headers or {},
+            object_name,
+            subject,
+            create_at
+        })
+    
+        return sequence
+    end
+    
+    -- Function to get message by sequence
+    -- @param sequence uint64 - message sequence number
+    -- @return tuple or nil
+    function get_message_by_sequence(sequence)
+        return box.space.message:get(sequence)
+    end
+    
+    -- Function to get messages by subject
+    -- @param subject string - topic name
+    -- @param start_sequence uint64 - starting sequence (inclusive)
+    -- @param limit number - max messages to return
+    -- @return array of tuples
+    function get_messages_by_subject(subject, start_sequence, limit)
+        local messages = {}
+        local count = 0
+    
+        for _, tuple in box.space.message.index.subject_sequence:pairs({subject, start_sequence}) do
+            if tuple[4] ~= subject then
+                break
+            end
+    
+            if count >= limit then
+                break
+            end
+    
+            table.insert(messages, tuple)
+            count = count + 1
+        end
+    
+        return messages
+    end
+    
+    -- Function to get latest sequence for a subject
+    -- @param subject string - topic name
+    -- @return uint64 - latest sequence or 0
+    function get_latest_sequence_for_subject(subject)
+        local max_tuple = box.space.message.index.subject_sequence:max({subject})
+        if max_tuple == nil or max_tuple[4] ~= subject then
+            return 0
+        end
+        return max_tuple[1]
+    end
+    
+    -- Function to update consumer position
+    -- @param durable_name string - consumer group name
+    -- @param subject string - topic name
+    -- @param last_sequence uint64 - last read sequence
+    function update_consumer_position(durable_name, subject, last_sequence)
+        local key = {durable_name, subject}
+        local existing = box.space.consumers:get(key)
+    
+        if existing == nil then
+            box.space.consumers:insert({durable_name, subject, last_sequence})
+        else
+            box.space.consumers:update(key, {{'=', 3, last_sequence}})
+        end
+    
+        return true
+    end
+    
+    -- Function to get consumer position
+    -- @param durable_name string - consumer group name
+    -- @param subject string - topic name
+    -- @return uint64 - last read sequence or 0
+    function get_consumer_position(durable_name, subject)
+        local tuple = box.space.consumers:get({durable_name, subject})
+        if tuple == nil then
+            return 0
+        end
+        return tuple[3]
+    end
+    
+    -- Function to get all consumers for a subject
+    -- @param subject string - topic name
+    -- @return array of tuples
+    function get_consumers_by_subject(subject)
+        local result = {}
+        for _, tuple in box.space.consumers.index.subject:pairs(subject) do
+            table.insert(result, tuple)
+        end
+        return result
+    end
+    
+    -- Function to delete old messages (TTL cleanup)
+    -- @param ttl_seconds number - time to live in seconds
+    -- @return deleted_count, array of deleted message info
+    function delete_old_messages(ttl_seconds)
+        local current_time = os.time()
+        local cutoff_time = current_time - ttl_seconds
+        local deleted_count = 0
+        local deleted_messages = {}
+    
+        for _, tuple in box.space.message.index.create_at:pairs() do
+            if tuple[5] < cutoff_time then
+                table.insert(deleted_messages, {
+                    sequence = tuple[1],
+                    subject = tuple[4],
+                    object_name = tuple[3]
+                })
+                box.space.message:delete(tuple[1])
+                deleted_count = deleted_count + 1
+            end
+        end
+    
+        return deleted_count, deleted_messages
+    end
+    
+    -- Create user for application access
+    box.once('create_app_user', function()
+        box.schema.user.create('minitoolstream', {
+            password = 'changeme',
+            if_not_exists = true
+        })
+    
+        box.schema.user.grant('minitoolstream', 'read,write,execute', 'universe', nil, {
+            if_not_exists = true
+        })
+    
+        print('MiniToolStream: Application user created')
+    end)
+    
+    print('MiniToolStream: Tarantool initialization complete')

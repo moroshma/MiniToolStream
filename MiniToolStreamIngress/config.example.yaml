@@ -1,0 +1,28 @@
+# MiniToolStream Ingress Configuration Example
+
+server:
+  port: 50051
+
+tarantool:
+  address: localhost:3301
+  user: minitoolstream
+  password: changeme
+  timeout: 5s
+
+minio:
+  endpoint: localhost:9000
+  access_key_id: minioadmin
+  secret_access_key: minioadmin
+  use_ssl: false
+  bucket_name: minitoolstream
+
+vault:
+  enabled: false
+  address: http://localhost:8200
+  token: ""
+  # token_path: /var/run/secrets/vault/token
+
+logger:
+  level: info
+  format: json
+  output_path: stdout
