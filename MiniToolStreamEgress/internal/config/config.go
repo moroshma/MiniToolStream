@@ -41,6 +41,7 @@ type MinIOConfig struct {
 	AccessKeyID     string `yaml:"access_key_id" envconfig:"MINIO_ACCESS_KEY_ID" default:"minioadmin"`
 	SecretAccessKey string `yaml:"secret_access_key" envconfig:"MINIO_SECRET_ACCESS_KEY" default:"minioadmin"`
 	UseSSL          bool   `yaml:"use_ssl" envconfig:"MINIO_USE_SSL" default:"false"`
+	BucketName      string `yaml:"bucket_name" envconfig:"MINIO_BUCKET_NAME" default:"minitoolstream"`
 
 	// Vault path for credentials (optional)
 	VaultPath string `yaml:"vault_path" envconfig:"MINIO_VAULT_PATH"`
@@ -68,15 +69,26 @@ func Load(configPath string) (*Config, error) {
 	cfg := &Config{}
 
 	// Load from file if exists
+	fileLoaded := false
 	if configPath != "" {
 		if err := loadFromFile(configPath, cfg); err != nil {
 			return nil, fmt.Errorf("failed to load config from file: %w", err)
 		}
+		fileLoaded = true
 	}
+
+	// Store original Vault.Enabled value from file before envconfig processes it
+	originalVaultEnabled := cfg.Vault.Enabled
 
 	// Override with environment variables
 	if err := envconfig.Process("", cfg); err != nil {
 		return nil, fmt.Errorf("failed to process environment variables: %w", err)
+	}
+
+	// If file was loaded and VAULT_ENABLED env var is not set, restore the file value
+	// This prevents envconfig from applying its default value over the file value
+	if fileLoaded && os.Getenv("VAULT_ENABLED") == "" {
+		cfg.Vault.Enabled = originalVaultEnabled
 	}
 
 	// Validate configuration
@@ -117,6 +129,10 @@ func (c *Config) Validate() error {
 
 	if c.MinIO.Endpoint == "" {
 		return fmt.Errorf("minio endpoint is required")
+	}
+
+	if c.MinIO.BucketName == "" {
+		return fmt.Errorf("minio bucket name is required")
 	}
 
 	if c.Vault.Enabled && c.Vault.Address == "" {

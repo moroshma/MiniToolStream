@@ -9,26 +9,30 @@ import (
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
+
+	"github.com/moroshma/MiniToolStream/MiniToolStreamIngress/pkg/logger"
 )
 
-// Config represents MinIO client configuration
+// Config represents MinIO repository configuration
 type Config struct {
 	Endpoint        string
 	AccessKeyID     string
 	SecretAccessKey string
 	UseSSL          bool
+	BucketName      string
 }
 
-// Client represents a MinIO client
-type Client struct {
+// Repository represents a MinIO repository
+type Repository struct {
 	client        *minio.Client
 	config        *Config
+	logger        *logger.Logger
 	bucketCache   map[string]bool
 	bucketCacheMu sync.RWMutex
 }
 
-// NewClient creates a new MinIO client
-func NewClient(config *Config) (*Client, error) {
+// NewRepository creates a new MinIO repository
+func NewRepository(config *Config, log *logger.Logger) (*Repository, error) {
 	if config == nil {
 		return nil, fmt.Errorf("config cannot be nil")
 	}
@@ -42,13 +46,14 @@ func NewClient(config *Config) (*Client, error) {
 		return nil, fmt.Errorf("failed to create MinIO client: %w", err)
 	}
 
-	client := &Client{
+	repo := &Repository{
 		client:      minioClient,
 		config:      config,
+		logger:      log,
 		bucketCache: make(map[string]bool),
 	}
 
-	return client, nil
+	return repo, nil
 }
 
 // normalizeBucketName converts subject name to valid bucket name
@@ -62,70 +67,103 @@ func normalizeBucketName(subject string) string {
 }
 
 // EnsureBucket creates bucket if it doesn't exist
-func (c *Client) EnsureBucket(ctx context.Context, subject string) (string, error) {
-	bucketName := normalizeBucketName(subject)
+// For Ingress, we use a single bucket configured in settings
+func (r *Repository) EnsureBucket(ctx context.Context) error {
+	bucketName := r.config.BucketName
 
 	// Check cache first
-	c.bucketCacheMu.RLock()
-	if c.bucketCache[bucketName] {
-		c.bucketCacheMu.RUnlock()
-		return bucketName, nil
+	r.bucketCacheMu.RLock()
+	if r.bucketCache[bucketName] {
+		r.bucketCacheMu.RUnlock()
+		return nil
 	}
-	c.bucketCacheMu.RUnlock()
+	r.bucketCacheMu.RUnlock()
 
 	// Check if bucket exists
-	exists, err := c.client.BucketExists(ctx, bucketName)
+	exists, err := r.client.BucketExists(ctx, bucketName)
 	if err != nil {
-		return "", fmt.Errorf("failed to check bucket existence: %w", err)
+		r.logger.Error("Failed to check bucket existence",
+			logger.String("bucket", bucketName),
+			logger.Error(err),
+		)
+		return fmt.Errorf("failed to check bucket existence: %w", err)
 	}
 
 	if !exists {
+		r.logger.Info("Creating bucket",
+			logger.String("bucket", bucketName),
+		)
 		// Create bucket
-		err = c.client.MakeBucket(ctx, bucketName, minio.MakeBucketOptions{})
+		err = r.client.MakeBucket(ctx, bucketName, minio.MakeBucketOptions{})
 		if err != nil {
-			return "", fmt.Errorf("failed to create bucket: %w", err)
+			r.logger.Error("Failed to create bucket",
+				logger.String("bucket", bucketName),
+				logger.Error(err),
+			)
+			return fmt.Errorf("failed to create bucket: %w", err)
 		}
+		r.logger.Info("Bucket created successfully",
+			logger.String("bucket", bucketName),
+		)
 	}
 
 	// Update cache
-	c.bucketCacheMu.Lock()
-	c.bucketCache[bucketName] = true
-	c.bucketCacheMu.Unlock()
+	r.bucketCacheMu.Lock()
+	r.bucketCache[bucketName] = true
+	r.bucketCacheMu.Unlock()
 
-	return bucketName, nil
+	return nil
 }
 
 // UploadData uploads data to MinIO
-func (c *Client) UploadData(ctx context.Context, subject string, objectName string, data []byte, contentType string) error {
+func (r *Repository) UploadData(ctx context.Context, objectName string, data []byte, contentType string) error {
 	if len(data) == 0 {
 		// No data to upload
 		return nil
 	}
 
+	bucketName := r.config.BucketName
+
+	r.logger.Debug("Uploading data to MinIO",
+		logger.String("bucket", bucketName),
+		logger.String("object", objectName),
+		logger.Int("size", len(data)),
+		logger.String("content_type", contentType),
+	)
+
 	// Ensure bucket exists
-	bucketName, err := c.EnsureBucket(ctx, subject)
-	if err != nil {
+	if err := r.EnsureBucket(ctx); err != nil {
 		return err
 	}
 
 	// Upload object
 	reader := bytes.NewReader(data)
-	_, err = c.client.PutObject(ctx, bucketName, objectName, reader, int64(len(data)), minio.PutObjectOptions{
+	_, err := r.client.PutObject(ctx, bucketName, objectName, reader, int64(len(data)), minio.PutObjectOptions{
 		ContentType: contentType,
 	})
 	if err != nil {
+		r.logger.Error("Failed to upload object to MinIO",
+			logger.String("bucket", bucketName),
+			logger.String("object", objectName),
+			logger.Error(err),
+		)
 		return fmt.Errorf("failed to upload object: %w", err)
 	}
+
+	r.logger.Debug("Data uploaded successfully",
+		logger.String("bucket", bucketName),
+		logger.String("object", objectName),
+	)
 
 	return nil
 }
 
 // GetObjectURL returns the URL for accessing an object
-func (c *Client) GetObjectURL(subject string, objectName string) string {
-	bucketName := normalizeBucketName(subject)
+func (r *Repository) GetObjectURL(objectName string) string {
+	bucketName := r.config.BucketName
 	protocol := "http"
-	if c.config.UseSSL {
+	if r.config.UseSSL {
 		protocol = "https"
 	}
-	return fmt.Sprintf("%s://%s/%s/%s", protocol, c.config.Endpoint, bucketName, objectName)
+	return fmt.Sprintf("%s://%s/%s/%s", protocol, r.config.Endpoint, bucketName, objectName)
 }

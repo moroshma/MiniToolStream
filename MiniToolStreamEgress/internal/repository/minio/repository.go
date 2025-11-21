@@ -25,6 +25,7 @@ type Config struct {
 	AccessKeyID     string
 	SecretAccessKey string
 	UseSSL          bool
+	BucketName      string
 }
 
 // NewRepository creates a new MinIO repository
@@ -60,7 +61,7 @@ func normalizeBucketName(subject string) string {
 
 // GetObject downloads data from MinIO
 func (r *Repository) GetObject(ctx context.Context, subject string, objectName string) ([]byte, error) {
-	bucketName := normalizeBucketName(subject)
+	bucketName := r.config.BucketName
 
 	r.logger.Debug("Getting object from MinIO",
 		pkglogger.String("bucket", bucketName),
@@ -91,7 +92,7 @@ func (r *Repository) GetObject(ctx context.Context, subject string, objectName s
 
 // GetObjectURL returns the URL for accessing an object
 func (r *Repository) GetObjectURL(subject string, objectName string) string {
-	bucketName := normalizeBucketName(subject)
+	bucketName := r.config.BucketName
 	protocol := "http"
 	if r.config.UseSSL {
 		protocol = "https"

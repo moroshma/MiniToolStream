@@ -53,6 +53,11 @@ func main() {
 
 	// Initialize Vault client if enabled
 	ctx := context.Background()
+	appLogger.Info("Vault configuration",
+		logger.Bool("enabled", cfg.Vault.Enabled),
+		logger.String("address", cfg.Vault.Address),
+	)
+
 	vaultClient, err := config.NewVaultClient(&cfg.Vault)
 	if err != nil {
 		appLogger.Fatal("Failed to create Vault client", logger.Error(err))
@@ -65,6 +70,8 @@ func main() {
 			appLogger.Fatal("Failed to apply Vault secrets", logger.Error(err))
 		}
 		appLogger.Info("Secrets loaded from Vault successfully")
+	} else {
+		appLogger.Info("Vault client is nil - secrets will not be loaded from Vault")
 	}
 
 	// Initialize Tarantool repository
@@ -89,12 +96,16 @@ func main() {
 	appLogger.Info("✓ Connected to Tarantool")
 
 	// Initialize MinIO repository
-	appLogger.Info("Connecting to MinIO", logger.String("endpoint", cfg.MinIO.Endpoint))
+	appLogger.Info("Connecting to MinIO",
+		logger.String("endpoint", cfg.MinIO.Endpoint),
+		logger.String("bucket", cfg.MinIO.BucketName),
+	)
 	minioCfg := &minioRepo.Config{
 		Endpoint:        cfg.MinIO.Endpoint,
 		AccessKeyID:     cfg.MinIO.AccessKeyID,
 		SecretAccessKey: cfg.MinIO.SecretAccessKey,
 		UseSSL:          cfg.MinIO.UseSSL,
+		BucketName:      cfg.MinIO.BucketName,
 	}
 
 	storageRepo, err := minioRepo.NewRepository(minioCfg, appLogger)

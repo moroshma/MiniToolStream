@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/tarantool/go-tarantool/v2"
+
+	"github.com/moroshma/MiniToolStream/MiniToolStreamIngress/pkg/logger"
 )
 
 // Config represents configuration for Tarantool connection
@@ -17,16 +19,17 @@ type Config struct {
 	Timeout  time.Duration
 }
 
-// Client represents a connection to Tarantool
-type Client struct {
+// Repository represents a connection to Tarantool
+type Repository struct {
 	conn   *tarantool.Connection
 	config *Config
+	logger *logger.Logger
 	mu     sync.RWMutex
 	closed bool
 }
 
-// NewClient creates a new Tarantool client
-func NewClient(config *Config) (*Client, error) {
+// NewRepository creates a new Tarantool repository
+func NewRepository(config *Config, log *logger.Logger) (*Repository, error) {
 	if config == nil {
 		return nil, fmt.Errorf("config cannot be nil")
 	}
@@ -51,53 +54,54 @@ func NewClient(config *Config) (*Client, error) {
 		return nil, fmt.Errorf("failed to connect to Tarantool: %w", err)
 	}
 
-	client := &Client{
+	repo := &Repository{
 		conn:   conn,
 		config: config,
+		logger: log,
 		closed: false,
 	}
 
-	return client, nil
+	return repo, nil
 }
 
 // Close closes the Tarantool connection
-func (c *Client) Close() error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+func (r *Repository) Close() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 
-	if c.closed {
+	if r.closed {
 		return nil
 	}
 
-	c.closed = true
-	return c.conn.Close()
+	r.closed = true
+	return r.conn.Close()
 }
 
 // Ping checks if the connection to Tarantool is alive
-func (c *Client) Ping() error {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
+func (r *Repository) Ping() error {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 
-	if c.closed {
-		return fmt.Errorf("client is closed")
+	if r.closed {
+		return fmt.Errorf("repository is closed")
 	}
 
-	_, err := c.conn.Ping()
+	_, err := r.conn.Ping()
 	return err
 }
 
-// Call executes a Tarantool function
-func (c *Client) Call(functionName string, args []interface{}) ([]interface{}, error) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
+// call executes a Tarantool function
+func (r *Repository) call(functionName string, args []interface{}) ([]interface{}, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 
-	if c.closed {
-		return nil, fmt.Errorf("client is closed")
+	if r.closed {
+		return nil, fmt.Errorf("repository is closed")
 	}
 
 	// Use Call17 for better type support
 	req := tarantool.NewCall17Request(functionName).Args(args)
-	future := c.conn.Do(req)
+	future := r.conn.Do(req)
 	resp, err := future.Get()
 	if err != nil {
 		return nil, err
@@ -108,7 +112,7 @@ func (c *Client) Call(functionName string, args []interface{}) ([]interface{}, e
 
 // PublishMessage publishes a message to Tarantool
 // Returns sequence number
-func (c *Client) PublishMessage(subject string, headers map[string]string) (uint64, error) {
+func (r *Repository) PublishMessage(subject string, headers map[string]string) (uint64, error) {
 	if subject == "" {
 		return 0, fmt.Errorf("subject cannot be empty")
 	}
@@ -117,12 +121,21 @@ func (c *Client) PublishMessage(subject string, headers map[string]string) (uint
 		headers = make(map[string]string)
 	}
 
+	r.logger.Debug("Publishing message to Tarantool",
+		logger.String("subject", subject),
+		logger.Any("headers", headers),
+	)
+
 	// Call Tarantool function
-	resp, err := c.Call("publish_message", []interface{}{
+	resp, err := r.call("publish_message", []interface{}{
 		subject,
 		headers,
 	})
 	if err != nil {
+		r.logger.Error("Failed to publish message to Tarantool",
+			logger.String("subject", subject),
+			logger.Error(err),
+		)
 		return 0, fmt.Errorf("failed to publish message: %w", err)
 	}
 
@@ -133,6 +146,12 @@ func (c *Client) PublishMessage(subject string, headers map[string]string) (uint
 
 	// Call17 returns the sequence number directly
 	sequence := toUint64(resp[0])
+
+	r.logger.Debug("Message published successfully",
+		logger.String("subject", subject),
+		logger.Uint64("sequence", sequence),
+	)
+
 	return sequence, nil
 }
 

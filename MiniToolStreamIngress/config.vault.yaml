@@ -1,0 +1,33 @@
+# MiniToolStream Ingress Configuration with Vault
+
+server:
+  port: 50051
+
+tarantool:
+  address: localhost:3301
+  user: ""  # Will be loaded from Vault
+  password: ""  # Will be loaded from Vault
+  timeout: 5s
+  # Vault path for credentials
+  vault_path: minitoolstream/tarantool
+
+minio:
+  endpoint: localhost:9000
+  access_key_id: ""  # Will be loaded from Vault
+  secret_access_key: ""  # Will be loaded from Vault
+  use_ssl: false
+  bucket_name: minitoolstream
+  # Vault path for credentials
+  vault_path: minitoolstream/minio
+
+vault:
+  enabled: true
+  address: http://localhost:8200
+  token: dev-root-token
+  # Alternatively, use token from file:
+  # token_path: /var/run/secrets/vault/token
+
+logger:
+  level: info
+  format: json
+  output_path: stdout

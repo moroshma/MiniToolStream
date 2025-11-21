@@ -1,92 +1,162 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
 	"net"
-	"time"
+	"os"
+	"os/signal"
+	"syscall"
 
-	"github.com/moroshma/MiniToolStream/MiniToolStreamIngress/internal/repository/minio"
-	"github.com/moroshma/MiniToolStream/MiniToolStreamIngress/internal/repository/tarantool"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 
-	"github.com/moroshma/MiniToolStream/MiniToolStreamIngress/internal/app"
+	"github.com/moroshma/MiniToolStream/MiniToolStreamIngress/internal/config"
+	grpcHandler "github.com/moroshma/MiniToolStream/MiniToolStreamIngress/internal/delivery/grpc"
+	minioRepo "github.com/moroshma/MiniToolStream/MiniToolStreamIngress/internal/repository/minio"
+	tarantoolRepo "github.com/moroshma/MiniToolStream/MiniToolStreamIngress/internal/repository/tarantool"
+	"github.com/moroshma/MiniToolStream/MiniToolStreamIngress/internal/usecase"
+	"github.com/moroshma/MiniToolStream/MiniToolStreamIngress/pkg/logger"
 	pb "github.com/moroshma/MiniToolStream/model"
 )
 
 var (
-	port              = flag.Int("port", 50051, "gRPC app port")
-	tarantoolAddress  = flag.String("tarantool-addr", "localhost:3301", "Tarantool address")
-	tarantoolUser     = flag.String("tarantool-user", "minitoolstream", "Tarantool user")
-	tarantoolPassword = flag.String("tarantool-password", "changeme", "Tarantool password")
-	minioEndpoint     = flag.String("minio-endpoint", "localhost:9000", "MinIO endpoint")
-	minioAccessKey    = flag.String("minio-access-key", "minioadmin", "MinIO access key")
-	minioSecretKey    = flag.String("minio-secret-key", "minioadmin", "MinIO secret key")
-	minioUseSSL       = flag.Bool("minio-use-ssl", false, "Use SSL for MinIO")
+	configPath = flag.String("config", "", "Path to configuration file (optional)")
 )
 
 func main() {
 	flag.Parse()
 
-	log.Printf("Starting MiniToolStream Ingress gRPC Server...")
-	log.Printf("Tarantool: %s", *tarantoolAddress)
-	log.Printf("MinIO: %s", *minioEndpoint)
-	log.Printf("gRPC Port: %d", *port)
-
-	// Create Tarantool client
-	tarantoolConfig := &tarantool.Config{
-		Address:  *tarantoolAddress,
-		User:     *tarantoolUser,
-		Password: *tarantoolPassword,
-		Timeout:  5 * time.Second,
-	}
-
-	tarantoolClient, err := tarantool.NewClient(tarantoolConfig)
+	// Load configuration
+	cfg, err := config.Load(*configPath)
 	if err != nil {
-		log.Fatalf("Failed to connect to Tarantool: %v", err)
+		log.Fatalf("Failed to load configuration: %v", err)
 	}
-	defer tarantoolClient.Close()
+
+	// Initialize logger
+	appLogger, err := logger.New(logger.Config{
+		Level:      cfg.Logger.Level,
+		Format:     cfg.Logger.Format,
+		OutputPath: cfg.Logger.OutputPath,
+	})
+	if err != nil {
+		log.Fatalf("Failed to initialize logger: %v", err)
+	}
+	defer appLogger.Sync()
+
+	appLogger.Info("Starting MiniToolStream Ingress gRPC Server",
+		logger.String("version", "1.0.0"),
+		logger.Int("grpc_port", cfg.Server.Port),
+	)
+
+	// Initialize Vault client if enabled
+	ctx := context.Background()
+	appLogger.Info("Vault configuration",
+		logger.Bool("enabled", cfg.Vault.Enabled),
+		logger.String("address", cfg.Vault.Address),
+	)
+
+	vaultClient, err := config.NewVaultClient(&cfg.Vault)
+	if err != nil {
+		appLogger.Fatal("Failed to create Vault client", logger.Error(err))
+	}
+
+	// Apply Vault secrets to configuration
+	if vaultClient != nil {
+		appLogger.Info("Loading secrets from Vault")
+		if err := config.ApplyVaultSecrets(ctx, cfg, vaultClient); err != nil {
+			appLogger.Fatal("Failed to apply Vault secrets", logger.Error(err))
+		}
+		appLogger.Info("Secrets loaded from Vault successfully")
+	} else {
+		appLogger.Info("Vault is disabled - using configuration file values")
+	}
+
+	// Initialize Tarantool repository
+	appLogger.Info("Connecting to Tarantool", logger.String("address", cfg.Tarantool.Address))
+	tarantoolCfg := &tarantoolRepo.Config{
+		Address:  cfg.Tarantool.Address,
+		User:     cfg.Tarantool.User,
+		Password: cfg.Tarantool.Password,
+		Timeout:  cfg.Tarantool.Timeout,
+	}
+
+	messageRepo, err := tarantoolRepo.NewRepository(tarantoolCfg, appLogger)
+	if err != nil {
+		appLogger.Fatal("Failed to connect to Tarantool", logger.Error(err))
+	}
+	defer messageRepo.Close()
 
 	// Test Tarantool connection
-	if err := tarantoolClient.Ping(); err != nil {
-		log.Fatalf("Failed to ping Tarantool: %v", err)
+	if err := messageRepo.Ping(); err != nil {
+		appLogger.Fatal("Failed to ping Tarantool", logger.Error(err))
 	}
-	log.Printf("✓ Connected to Tarantool")
+	appLogger.Info("✓ Connected to Tarantool")
 
-	// Create MinIO client
-	minioConfig := &minio.Config{
-		Endpoint:        *minioEndpoint,
-		AccessKeyID:     *minioAccessKey,
-		SecretAccessKey: *minioSecretKey,
-		UseSSL:          *minioUseSSL,
+	// Initialize MinIO repository
+	appLogger.Info("Connecting to MinIO",
+		logger.String("endpoint", cfg.MinIO.Endpoint),
+		logger.String("bucket", cfg.MinIO.BucketName),
+	)
+	minioCfg := &minioRepo.Config{
+		Endpoint:        cfg.MinIO.Endpoint,
+		AccessKeyID:     cfg.MinIO.AccessKeyID,
+		SecretAccessKey: cfg.MinIO.SecretAccessKey,
+		UseSSL:          cfg.MinIO.UseSSL,
+		BucketName:      cfg.MinIO.BucketName,
 	}
 
-	minioClient, err := minio.NewClient(minioConfig)
+	storageRepo, err := minioRepo.NewRepository(minioCfg, appLogger)
 	if err != nil {
-		log.Fatalf("Failed to create MinIO client: %v", err)
+		appLogger.Fatal("Failed to create MinIO client", logger.Error(err))
 	}
-	log.Printf("✓ Connected to MinIO")
 
-	// Create gRPC app
+	// Ensure bucket exists
+	if err := storageRepo.EnsureBucket(ctx); err != nil {
+		appLogger.Fatal("Failed to ensure MinIO bucket", logger.Error(err))
+	}
+	appLogger.Info("✓ Connected to MinIO")
+
+	// Initialize use case
+	publishUC := usecase.NewPublishUseCase(
+		messageRepo,
+		storageRepo,
+		appLogger,
+	)
+
+	// Initialize gRPC handler
+	ingressHandler := grpcHandler.NewIngressHandler(publishUC, appLogger)
+
+	// Create gRPC server
 	grpcServer := grpc.NewServer()
-	ingressServer := app.NewIngressServer(tarantoolClient, minioClient)
-	pb.RegisterIngressServiceServer(grpcServer, ingressServer)
+	pb.RegisterIngressServiceServer(grpcServer, ingressHandler)
 
 	// Register reflection for grpcurl
 	reflection.Register(grpcServer)
 
 	// Start listening
-	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
+	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", cfg.Server.Port))
 	if err != nil {
-		log.Fatalf("Failed to listen: %v", err)
+		appLogger.Fatal("Failed to listen", logger.Error(err), logger.Int("port", cfg.Server.Port))
 	}
 
-	log.Printf("✓ gRPC app listening on :%d", *port)
-	log.Printf("Ready to accept requests...")
+	appLogger.Info("✓ gRPC server listening", logger.Int("port", cfg.Server.Port))
+	appLogger.Info("Ready to accept requests...")
 
+	// Handle graceful shutdown
+	go func() {
+		sigint := make(chan os.Signal, 1)
+		signal.Notify(sigint, os.Interrupt, syscall.SIGTERM)
+		<-sigint
+
+		appLogger.Info("Received shutdown signal, shutting down gracefully...")
+		grpcServer.GracefulStop()
+	}()
+
+	// Start serving
 	if err := grpcServer.Serve(listener); err != nil {
-		log.Fatalf("Failed to serve: %v", err)
+		appLogger.Fatal("Failed to serve", logger.Error(err))
 	}
 }
