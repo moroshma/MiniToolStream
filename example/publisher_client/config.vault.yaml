@@ -17,7 +17,7 @@ vault:
 
   # Path to secrets in Vault
   # Secrets can include: server_address, default_subject, etc.
-  secrets_path: minitoolstream/publisher
+  secrets_path: minitoolstream_connector/publisher
 
 logger:
   level: info

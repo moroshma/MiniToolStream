@@ -8,7 +8,7 @@ import (
 
 	"github.com/moroshma/MiniToolStream/MiniToolStreamEgress/internal/minio"
 	"github.com/moroshma/MiniToolStream/MiniToolStreamEgress/internal/tarantool"
-	pb "github.com/moroshma/MiniToolStream/model"
+	pb "github.com/moroshma/MiniToolStreamConnector/model"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 

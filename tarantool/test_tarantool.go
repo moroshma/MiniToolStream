@@ -44,7 +44,7 @@ func main() {
 	// Connect to Tarantool
 	dialer := tarantool.NetDialer{
 		Address:  "localhost:3301",
-		User:     "minitoolstream",
+		User:     "minitoolstream_connector",
 		Password: "changeme",
 	}
 

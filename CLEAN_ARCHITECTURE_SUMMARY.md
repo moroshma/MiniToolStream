@@ -270,8 +270,8 @@ manager.RegisterHandler(handler.NewImagePublisherHandler(...))
 ### Publisher Client - После
 ```go
 // Зависимость от библиотеки
-import "github.com/moroshma/MiniToolStream/pkg/minitoolstream"
-import "github.com/moroshma/MiniToolStream/pkg/minitoolstream/handler"
+import "github.com/moroshma/MiniToolStream/pkg/minitoolstream_connector"
+import "github.com/moroshma/MiniToolStream/pkg/minitoolstream_connector/handler"
 
 // Чистый API
 pub, _ := minitoolstream.NewPublisher("localhost:50051")

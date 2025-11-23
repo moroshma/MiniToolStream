@@ -1,7 +1,7 @@
 services:
   tarantool:
     image: tarantool/tarantool:2.11
-    container_name: minitoolstream-tarantool
+    container_name: minitoolstream_connector-tarantool
     ports:
       - "3301:3301"
     volumes:
@@ -20,7 +20,7 @@ services:
   # MinIO - S3-compatible object storage for message data
   minio:
     image: minio/minio:latest
-    container_name: minitoolstream-minio
+    container_name: minitoolstream_connector-minio
     ports:
       - "9000:9000"      # MinIO API
       - "9001:9001"      # MinIO Console (Admin UI)
@@ -42,7 +42,7 @@ services:
   # MinIO Client - для инициализации bucket'а
   minio-init:
     image: minio/mc:latest
-    container_name: minitoolstream-minio-init
+    container_name: minitoolstream_connector-minio-init
     depends_on:
       minio:
         condition: service_healthy
@@ -59,7 +59,7 @@ services:
   # HashiCorp Vault - secrets management
   vault:
     image: hashicorp/vault:latest
-    container_name: minitoolstream-vault
+    container_name: minitoolstream_connector-vault
     ports:
       - "8200:8200"
     environment:
@@ -84,7 +84,7 @@ services:
   # Vault Initializer - настройка секретов
   vault-init:
     image: hashicorp/vault:latest
-    container_name: minitoolstream-vault-init
+    container_name: minitoolstream_connector-vault-init
     depends_on:
       vault:
         condition: service_healthy

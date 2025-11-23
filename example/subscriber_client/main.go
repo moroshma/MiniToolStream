@@ -7,9 +7,9 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/moroshma/MiniToolStream/pkg/minitoolstream/subscriber"
-	"github.com/moroshma/MiniToolStream/pkg/minitoolstream/subscriber/domain"
-	"github.com/moroshma/MiniToolStream/pkg/minitoolstream/subscriber/handler"
+	"github.com/moroshma/MiniToolStreamConnector/minitoolstream_connector/subscriber"
+	"github.com/moroshma/MiniToolStreamConnector/minitoolstream_connector/subscriber/domain"
+	"github.com/moroshma/MiniToolStreamConnector/minitoolstream_connector/subscriber/handler"
 )
 
 var (

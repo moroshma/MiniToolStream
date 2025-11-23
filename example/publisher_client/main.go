@@ -8,8 +8,8 @@ import (
 	"os"
 
 	"github.com/moroshma/MiniToolStream/example/publisher_client/internal/config"
-	"github.com/moroshma/MiniToolStream/pkg/minitoolstream"
-	"github.com/moroshma/MiniToolStream/pkg/minitoolstream/handler"
+	"github.com/moroshma/MiniToolStreamConnector/minitoolstream_connector"
+	"github.com/moroshma/MiniToolStreamConnector/minitoolstream_connector/handler"
 )
 
 var (
@@ -52,7 +52,7 @@ func main() {
 	}
 
 	// Create publisher using the library
-	pub, err := minitoolstream.NewPublisher(cfg.Client.ServerAddress)
+	pub, err := minitoolstream_connector.NewPublisher(cfg.Client.ServerAddress)
 	if err != nil {
 		log.Fatalf("Failed to create publisher: %v", err)
 	}

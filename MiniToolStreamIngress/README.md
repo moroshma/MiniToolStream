@@ -64,7 +64,7 @@ go build -o ingress-app .
 ./ingress-app \
   -port 50051 \
   -tarantool-addr localhost:3301 \
-  -tarantool-user minitoolstream \
+  -tarantool-user minitoolstream_connector \
   -tarantool-password changeme
 ```
 

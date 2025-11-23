@@ -10,16 +10,16 @@ tarantool:
   password: ""  # Will be loaded from Vault
   timeout: 5s
   # Vault path for credentials
-  vault_path: minitoolstream/tarantool
+  vault_path: minitoolstream_connector/tarantool
 
 minio:
   endpoint: localhost:9000
   access_key_id: ""  # Will be loaded from Vault
   secret_access_key: ""  # Will be loaded from Vault
   use_ssl: false
-  bucket_name: minitoolstream
+  bucket_name: minitoolstream_connector
   # Vault path for credentials
-  vault_path: minitoolstream/minio
+  vault_path: minitoolstream_connector/minio
 
 vault:
   enabled: true

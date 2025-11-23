@@ -1,7 +1,7 @@
 services:
   tarantool:
     image: tarantool/tarantool:2.11
-    container_name: minitoolstream-tarantool
+    container_name: minitoolstream_connector-tarantool
     ports:
       - "3301:3301"
     volumes:
