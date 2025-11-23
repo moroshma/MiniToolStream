@@ -348,12 +348,12 @@ end
 
 -- Create user for application access
 box.once('create_app_user', function()
-    box.schema.user.create('minitoolstream', {
+    box.schema.user.create('minitoolstream_connector', {
         password = 'changeme',
         if_not_exists = true
     })
 
-    box.schema.user.grant('minitoolstream', 'read,write,execute', 'universe', nil, {
+    box.schema.user.grant('minitoolstream_connector', 'read,write,execute', 'universe', nil, {
         if_not_exists = true
     })
 

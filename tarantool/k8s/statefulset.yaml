@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: tarantool
-  namespace: minitoolstream
+  namespace: minitoolstream_connector
 spec:
   serviceName: tarantool
   replicas: 1  # Один standalone pod

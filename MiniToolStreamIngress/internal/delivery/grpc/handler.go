@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	pb "github.com/moroshma/MiniToolStream/model"
+	pb "github.com/moroshma/MiniToolStreamConnector/model"
 
 	"github.com/moroshma/MiniToolStream/MiniToolStreamIngress/internal/usecase"
 	"github.com/moroshma/MiniToolStream/MiniToolStreamIngress/pkg/logger"

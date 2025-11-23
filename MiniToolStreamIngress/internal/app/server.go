@@ -6,7 +6,7 @@ import (
 
 	"github.com/moroshma/MiniToolStream/MiniToolStreamIngress/internal/repository/minio"
 	"github.com/moroshma/MiniToolStream/MiniToolStreamIngress/internal/repository/tarantool"
-	pb "github.com/moroshma/MiniToolStream/model"
+	pb "github.com/moroshma/MiniToolStreamConnector/model"
 )
 
 // IngressServer implements the gRPC IngressService

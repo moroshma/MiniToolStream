@@ -5,9 +5,9 @@ import (
 	"log"
 	"time"
 
-	"github.com/moroshma/MiniToolStream/pkg/minitoolstream"
-	"github.com/moroshma/MiniToolStream/pkg/minitoolstream/domain"
-	"github.com/moroshma/MiniToolStream/pkg/minitoolstream/handler"
+	"github.com/moroshma/MiniToolStreamConnector/minitoolstream_connector"
+	"github.com/moroshma/MiniToolStreamConnector/minitoolstream_connector/domain"
+	"github.com/moroshma/MiniToolStreamConnector/minitoolstream_connector/handler"
 )
 
 func main() {
@@ -38,7 +38,7 @@ func main() {
 }
 
 func testSingleMessage() {
-	pub, err := minitoolstream.NewPublisher("localhost:50051")
+	pub, err := minitoolstream_connector.NewPublisher("localhost:50051")
 	if err != nil {
 		log.Fatalf("Failed to create publisher: %v", err)
 	}
@@ -61,7 +61,7 @@ func testSingleMessage() {
 }
 
 func testImageUpload() {
-	pub, err := minitoolstream.NewPublisher("localhost:50051")
+	pub, err := minitoolstream_connector.NewPublisher("localhost:50051")
 	if err != nil {
 		log.Fatalf("Failed to create publisher: %v", err)
 	}
@@ -83,7 +83,7 @@ func testImageUpload() {
 }
 
 func testMultipleMessages() {
-	pub, err := minitoolstream.NewPublisher("localhost:50051")
+	pub, err := minitoolstream_connector.NewPublisher("localhost:50051")
 	if err != nil {
 		log.Fatalf("Failed to create publisher: %v", err)
 	}
@@ -122,7 +122,7 @@ func testMultipleMessages() {
 }
 
 func testCustomHeaders() {
-	pub, err := minitoolstream.NewPublisher("localhost:50051")
+	pub, err := minitoolstream_connector.NewPublisher("localhost:50051")
 	if err != nil {
 		log.Fatalf("Failed to create publisher: %v", err)
 	}

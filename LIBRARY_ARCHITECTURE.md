@@ -98,8 +98,8 @@ pkg/minitoolstream/
 ### Простой пример
 
 ```go
-import "github.com/moroshma/MiniToolStream/pkg/minitoolstream"
-import "github.com/moroshma/MiniToolStream/pkg/minitoolstream/handler"
+import "github.com/moroshma/MiniToolStream/pkg/minitoolstream_connector"
+import "github.com/moroshma/MiniToolStream/pkg/minitoolstream_connector/handler"
 
 // Создание publisher
 pub, err := minitoolstream.NewPublisher("localhost:50051")
@@ -241,8 +241,8 @@ manager, err := publisher.NewManager(config)
 
 **После:**
 ```go
-import "github.com/moroshma/MiniToolStream/pkg/minitoolstream"
-import "github.com/moroshma/MiniToolStream/pkg/minitoolstream/handler"
+import "github.com/moroshma/MiniToolStream/pkg/minitoolstream_connector"
+import "github.com/moroshma/MiniToolStream/pkg/minitoolstream_connector/handler"
 
 pub, err := minitoolstream.NewPublisher("localhost:50051")
 ```

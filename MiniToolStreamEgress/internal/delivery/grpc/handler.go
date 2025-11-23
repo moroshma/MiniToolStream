@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	pb "github.com/moroshma/MiniToolStream/model"
+	pb "github.com/moroshma/MiniToolStreamConnector/model"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/moroshma/MiniToolStream/MiniToolStreamEgress/internal/domain/entity"

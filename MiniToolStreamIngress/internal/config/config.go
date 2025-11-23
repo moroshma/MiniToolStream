@@ -26,7 +26,7 @@ type ServerConfig struct {
 // TarantoolConfig represents Tarantool connection configuration
 type TarantoolConfig struct {
 	Address  string        `yaml:"address" envconfig:"TARANTOOL_ADDRESS" default:"localhost:3301"`
-	User     string        `yaml:"user" envconfig:"TARANTOOL_USER" default:"minitoolstream"`
+	User     string        `yaml:"user" envconfig:"TARANTOOL_USER" default:"minitoolstream_connector"`
 	Password string        `yaml:"password" envconfig:"TARANTOOL_PASSWORD" default:"changeme"`
 	Timeout  time.Duration `yaml:"timeout" envconfig:"TARANTOOL_TIMEOUT" default:"5s"`
 
@@ -40,7 +40,7 @@ type MinIOConfig struct {
 	AccessKeyID     string `yaml:"access_key_id" envconfig:"MINIO_ACCESS_KEY_ID" default:"minioadmin"`
 	SecretAccessKey string `yaml:"secret_access_key" envconfig:"MINIO_SECRET_ACCESS_KEY" default:"minioadmin"`
 	UseSSL          bool   `yaml:"use_ssl" envconfig:"MINIO_USE_SSL" default:"false"`
-	BucketName      string `yaml:"bucket_name" envconfig:"MINIO_BUCKET_NAME" default:"minitoolstream"`
+	BucketName      string `yaml:"bucket_name" envconfig:"MINIO_BUCKET_NAME" default:"minitoolstream_connector"`
 
 	// Vault path for credentials (optional)
 	VaultPath string `yaml:"vault_path" envconfig:"MINIO_VAULT_PATH"`

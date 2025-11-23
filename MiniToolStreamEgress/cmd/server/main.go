@@ -19,7 +19,7 @@ import (
 	tarantoolRepo "github.com/moroshma/MiniToolStream/MiniToolStreamEgress/internal/repository/tarantool"
 	"github.com/moroshma/MiniToolStream/MiniToolStreamEgress/internal/usecase"
 	"github.com/moroshma/MiniToolStream/MiniToolStreamEgress/pkg/logger"
-	pb "github.com/moroshma/MiniToolStream/model"
+	pb "github.com/moroshma/MiniToolStreamConnector/model"
 )
 
 var (

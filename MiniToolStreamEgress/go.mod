@@ -6,7 +6,7 @@ require (
 	github.com/hashicorp/vault/api v1.15.0
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/minio/minio-go/v7 v7.0.82
-	github.com/moroshma/MiniToolStream/model v0.0.0
+	github.com/moroshma/MiniToolStreamConnector/model v0.0.4
 	github.com/tarantool/go-tarantool/v2 v2.1.0
 	go.uber.org/zap v1.27.0
 	google.golang.org/grpc v1.77.0
@@ -48,5 +48,3 @@ require (
 	golang.org/x/time v0.0.0-20200416051211-89c76fbcd5d1 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251022142026-3a174f9686a8 // indirect
 )
-
-replace github.com/moroshma/MiniToolStream/model => ../model

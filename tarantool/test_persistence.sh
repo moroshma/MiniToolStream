@@ -14,7 +14,7 @@ echo "✅ Test data inserted"
 # Step 2: Count records before restart
 echo ""
 echo "Step 2: Checking data before restart..."
-BEFORE=$(docker exec minitoolstream-tarantool tarantool -e "
+BEFORE=$(docker exec minitoolstream_connector-tarantool tarantool -e "
 local net_box = require('net.box')
 local conn = net_box.connect('localhost:3301', {user='minitoolstream', password='changeme'})
 local result = conn.space.messages:count()
@@ -35,7 +35,7 @@ sleep 5
 # Step 4: Count records after restart
 echo ""
 echo "Step 4: Checking data after restart..."
-AFTER=$(docker exec minitoolstream-tarantool tarantool -e "
+AFTER=$(docker exec minitoolstream_connector-tarantool tarantool -e "
 local net_box = require('net.box')
 local conn = net_box.connect('localhost:3301', {user='minitoolstream', password='changeme', wait_connected=true, reconnect_after=0.1})
 local result = conn.space.messages:count()
@@ -62,7 +62,7 @@ fi
 # Step 6: Check WAL files
 echo ""
 echo "Step 6: Checking WAL and snapshot files..."
-docker exec minitoolstream-tarantool sh -c "ls -lh /var/lib/tarantool/sys_env/default/instance-001/*.{xlog,snap} 2>/dev/null | tail -5"
+docker exec minitoolstream_connector-tarantool sh -c "ls -lh /var/lib/tarantool/sys_env/default/instance-001/*.{xlog,snap} 2>/dev/null | tail -5"
 
 echo ""
 echo "🎉 Persistence test completed successfully!"

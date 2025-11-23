@@ -113,10 +113,10 @@ brew install minio/stable/mc  # macOS
 mc alias set local http://localhost:9000 minioadmin minioadmin
 
 # Список объектов
-mc ls local/minitoolstream
+mc ls local/minitoolstream_connector
 
 # Скачать объект
-mc cp local/minitoolstream/terminator.diff_38 ./
+mc cp local/minitoolstream_connector/terminator.diff_38 ./
 ```
 
 ## Управление
@@ -204,7 +204,7 @@ docker-compose exec tarantool tarantool -l /opt/tarantool/app.lua
 docker-compose ps minio
 
 # Проверка healthcheck
-docker inspect minitoolstream-minio | grep -A 10 Health
+docker inspect minitoolstream_connector-minio | grep -A 10 Health
 ```
 
 ### gRPC сервер не подключается к Tarantool

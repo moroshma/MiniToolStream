@@ -6,20 +6,20 @@ server:
 
 tarantool:
   address: localhost:3301
-  user: minitoolstream
+  user: minitoolstream_connector
   password: changeme
   timeout: 5s
   # Optional: Load credentials from Vault
-  # vault_path: minitoolstream/tarantool
+  # vault_path: minitoolstream_connector/tarantool
 
 minio:
   endpoint: localhost:9000
   access_key_id: minioadmin
   secret_access_key: minioadmin
   use_ssl: false
-  bucket_name: minitoolstream
+  bucket_name: minitoolstream_connector
   # Optional: Load credentials from Vault
-  # vault_path: minitoolstream/minio
+  # vault_path: minitoolstream_connector/minio
 
 vault:
   enabled: false

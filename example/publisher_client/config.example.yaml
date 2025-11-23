@@ -12,7 +12,7 @@ vault:
   address: http://localhost:8200
   token: ""
   # token_path: /var/run/secrets/vault/token
-  # secrets_path: minitoolstream/publisher
+  # secrets_path: minitoolstream_connector/publisher
 
 logger:
   level: info  # debug, info, warn, error

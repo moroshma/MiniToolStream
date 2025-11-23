@@ -393,7 +393,7 @@ docker-compose up -d
 
 ```bash
 kubectl delete -f tarantool/k8s/
-kubectl delete pvc tarantool-data-tarantool-0 -n minitoolstream
+kubectl delete pvc tarantool-data-tarantool-0 -n minitoolstream_connector
 kubectl apply -f tarantool/k8s/
 ```
 

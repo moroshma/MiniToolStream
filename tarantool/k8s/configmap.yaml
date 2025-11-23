@@ -2,7 +2,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: tarantool-init
-  namespace: minitoolstream
+  namespace: minitoolstream_connector
 data:
   init.lua: |
     -- MiniToolStream Tarantool 2.11 initialization script
