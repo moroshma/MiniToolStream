@@ -1,0 +1,24 @@
+# MiniToolStream Publisher Client Configuration with Vault
+
+client:
+  # These can be overridden by Vault secrets
+  server_address: localhost:50051
+  timeout: 10s
+  default_subject: ""  # Will be loaded from Vault
+  default_content_type: text/plain
+  batch_size: 10
+
+vault:
+  enabled: true
+  address: http://localhost:8200
+  token: dev-root-token
+  # Alternatively, use token from file:
+  # token_path: /var/run/secrets/vault/token
+
+  # Path to secrets in Vault
+  # Secrets can include: server_address, default_subject, etc.
+  secrets_path: minitoolstream/publisher
+
+logger:
+  level: info
+  format: console
