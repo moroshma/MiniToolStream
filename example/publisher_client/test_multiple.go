@@ -5,25 +5,21 @@ import (
 	"log"
 	"time"
 
-	"github.com/moroshma/MiniToolStream/example/publisher_client/internal/handler"
-	"github.com/moroshma/MiniToolStream/example/publisher_client/internal/publisher"
+	"github.com/moroshma/MiniToolStream/pkg/minitoolstream"
+	"github.com/moroshma/MiniToolStream/pkg/minitoolstream/domain"
+	"github.com/moroshma/MiniToolStream/pkg/minitoolstream/handler"
 )
 
 func main() {
 	log.Printf("MiniToolStream Publisher Client - Multiple Handlers Test")
 	log.Printf("Connecting to: localhost:50051")
 
-	// Create publisher manager
-	config := &publisher.Config{
-		ServerAddr: "localhost:50051",
-		Timeout:    30,
-	}
-
-	manager, err := publisher.NewManager(config)
+	// Create publisher using the library
+	pub, err := minitoolstream.NewPublisher("localhost:50051")
 	if err != nil {
-		log.Fatalf("Failed to create publisher manager: %v", err)
+		log.Fatalf("Failed to create publisher: %v", err)
 	}
-	defer manager.Close()
+	defer pub.Close()
 
 	// Create context with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -31,22 +27,41 @@ func main() {
 
 	// Register multiple handlers for different subjects
 	log.Printf("Registering multiple handlers...")
-	manager.RegisterHandlers([]handler.PublishHandler{
+	pub.RegisterHandlers([]domain.MessagePreparer{
 		// Images
-		handler.NewImagePublisherHandler("images.jpeg", "tst.jpeg"),
+		handler.NewImageHandler(&handler.ImageHandlerConfig{
+			Subject:   "images.jpeg",
+			ImagePath: "/Users/moroshma/go/MiniToolStream/example/publisher_client/tst.jpeg",
+		}),
 
 		// Raw data
-		handler.NewDataPublisherHandler("logs.system", []byte("System initialized"), "text/plain"),
-		handler.NewDataPublisherHandler("logs.app", []byte("Application started"), "text/plain"),
+		handler.NewDataHandler(&handler.DataHandlerConfig{
+			Subject:     "logs.system",
+			Data:        []byte("System initialized"),
+			ContentType: "text/plain",
+		}),
+		handler.NewDataHandler(&handler.DataHandlerConfig{
+			Subject:     "logs.app",
+			Data:        []byte("Application started"),
+			ContentType: "text/plain",
+		}),
 
 		// Test data
-		handler.NewDataPublisherHandler("test.debug", []byte("Debug message #1"), "text/plain"),
-		handler.NewDataPublisherHandler("final.test", []byte("Final test message"), "text/plain"),
+		handler.NewDataHandler(&handler.DataHandlerConfig{
+			Subject:     "test.debug",
+			Data:        []byte("Debug message #1"),
+			ContentType: "text/plain",
+		}),
+		handler.NewDataHandler(&handler.DataHandlerConfig{
+			Subject:     "final.test",
+			Data:        []byte("Final test message"),
+			ContentType: "text/plain",
+		}),
 	})
 
 	// Publish all registered handlers
 	log.Printf("Publishing all handlers...")
-	if err := manager.PublishAll(ctx); err != nil {
+	if err := pub.PublishAll(ctx, nil); err != nil {
 		log.Fatalf("Failed to publish: %v", err)
 	}
 
