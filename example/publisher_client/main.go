@@ -3,78 +3,184 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
-	"time"
+	"os"
 
+	"github.com/moroshma/MiniToolStream/example/publisher_client/internal/config"
 	"github.com/moroshma/MiniToolStream/pkg/minitoolstream"
 	"github.com/moroshma/MiniToolStream/pkg/minitoolstream/handler"
 )
 
 var (
-	serverAddr = flag.String("server", "localhost:50051", "MiniToolStreamIngress gRPC server address")
+	configPath = flag.String("config", "", "Path to configuration file (optional)")
 	imagePath  = flag.String("image", "", "Path to image file (optional)")
-	subject    = flag.String("subject", "", "Subject/channel name (required if using -image or -file)")
+	subject    = flag.String("subject", "", "Subject/channel name (optional, overrides config)")
 	filePath   = flag.String("file", "", "Path to file (optional)")
 	data       = flag.String("data", "", "Raw data to publish (optional)")
-	timeout    = flag.Int("timeout", 10, "Timeout in seconds")
 )
 
 func main() {
 	flag.Parse()
 
+	// Load configuration
+	cfg, err := config.Load(*configPath)
+	if err != nil {
+		log.Fatalf("Failed to load configuration: %v", err)
+	}
+
+	// Setup logging
+	setupLogging(cfg.Logger)
+
 	log.Printf("MiniToolStream Publisher Client")
-	log.Printf("Connecting to: %s", *serverAddr)
+	log.Printf("Server: %s", cfg.Client.ServerAddress)
+	log.Printf("Timeout: %s", cfg.Client.Timeout)
+
+	// Initialize Vault if enabled
+	ctx := context.Background()
+	vaultClient, err := config.NewVaultClient(&cfg.Vault)
+	if err != nil {
+		log.Fatalf("Failed to create Vault client: %v", err)
+	}
+
+	if vaultClient != nil {
+		log.Printf("Vault enabled: %s", cfg.Vault.Address)
+		if err := config.ApplyVaultSecrets(ctx, cfg, vaultClient); err != nil {
+			log.Fatalf("Failed to apply Vault secrets: %v", err)
+		}
+		log.Printf("✓ Vault secrets applied")
+	}
 
 	// Create publisher using the library
-	pub, err := minitoolstream.NewPublisher(*serverAddr)
+	pub, err := minitoolstream.NewPublisher(cfg.Client.ServerAddress)
 	if err != nil {
 		log.Fatalf("Failed to create publisher: %v", err)
 	}
 	defer pub.Close()
 
-	// Create context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*timeout)*time.Second)
-	defer cancel()
+	// Determine subject to use
+	publishSubject := determineSubject(*subject, cfg.Client.DefaultSubject)
 
 	// Register handlers based on flags
+	registered := false
+
 	if *imagePath != "" {
-		if *subject == "" {
-			log.Fatalf("Subject is required when using -image")
+		if publishSubject == "" {
+			log.Fatalf("Subject is required when using -image (use -subject or set default_subject in config)")
 		}
-		log.Printf("Registering image handler: %s -> %s", *imagePath, *subject)
+		log.Printf("Publishing image: %s -> %s", *imagePath, publishSubject)
 		pub.RegisterHandler(handler.NewImageHandler(&handler.ImageHandlerConfig{
-			Subject:   *subject,
+			Subject:   publishSubject,
 			ImagePath: *imagePath,
 		}))
+		registered = true
 	}
 
 	if *filePath != "" {
-		if *subject == "" {
-			log.Fatalf("Subject is required when using -file")
+		if publishSubject == "" {
+			log.Fatalf("Subject is required when using -file (use -subject or set default_subject in config)")
 		}
-		log.Printf("Registering file handler: %s -> %s", *filePath, *subject)
+		log.Printf("Publishing file: %s -> %s", *filePath, publishSubject)
 		pub.RegisterHandler(handler.NewFileHandler(&handler.FileHandlerConfig{
-			Subject:  *subject,
+			Subject:  publishSubject,
 			FilePath: *filePath,
 		}))
+		registered = true
 	}
 
 	if *data != "" {
-		if *subject == "" {
-			log.Fatalf("Subject is required when using -data")
+		if publishSubject == "" {
+			log.Fatalf("Subject is required when using -data (use -subject or set default_subject in config)")
 		}
-		log.Printf("Registering data handler: %d bytes -> %s", len(*data), *subject)
+		log.Printf("Publishing data: %d bytes -> %s", len(*data), publishSubject)
 		pub.RegisterHandler(handler.NewDataHandler(&handler.DataHandlerConfig{
-			Subject:     *subject,
+			Subject:     publishSubject,
 			Data:        []byte(*data),
-			ContentType: "text/plain",
+			ContentType: cfg.Client.DefaultContentType,
 		}))
+		registered = true
 	}
 
+	if !registered {
+		log.Printf("No data to publish. Use -image, -file, or -data flags.")
+		flag.Usage()
+		os.Exit(1)
+	}
+
+	// Create context with configured timeout
+	publishCtx, cancel := context.WithTimeout(ctx, cfg.Client.Timeout)
+	defer cancel()
+
 	// Publish all registered handlers
-	if err := pub.PublishAll(ctx, nil); err != nil {
+	if err := pub.PublishAll(publishCtx, nil); err != nil {
 		log.Fatalf("Failed to publish: %v", err)
 	}
 
 	log.Printf("✓ Publisher client finished")
+}
+
+// determineSubject determines which subject to use (flag takes precedence over config)
+func determineSubject(flagSubject, configSubject string) string {
+	if flagSubject != "" {
+		return flagSubject
+	}
+	return configSubject
+}
+
+// setupLogging configures logging based on configuration
+func setupLogging(cfg config.LoggerConfig) {
+	// Set log flags based on format
+	switch cfg.Format {
+	case "json":
+		// For JSON format, we would use a structured logger (e.g., zap, zerolog)
+		// For now, use standard format with timestamp
+		log.SetFlags(log.LstdFlags | log.Lshortfile)
+	case "console":
+		log.SetFlags(log.LstdFlags)
+	default:
+		log.SetFlags(log.LstdFlags)
+	}
+
+	// In a real application, you would also configure log level filtering
+	// For now, log level is informational
+	if cfg.Level == "debug" {
+		log.SetPrefix("[DEBUG] ")
+	}
+}
+
+// printUsage prints usage information
+func printUsage() {
+	fmt.Fprintf(os.Stderr, `MiniToolStream Publisher Client
+
+Usage:
+  %s [options]
+
+Options:
+`, os.Args[0])
+	flag.PrintDefaults()
+	fmt.Fprintf(os.Stderr, `
+Examples:
+  # Publish with config file
+  %s -config config.yaml -data "Hello World"
+
+  # Publish image
+  %s -subject "images.test" -image photo.jpg
+
+  # Publish file
+  %s -subject "docs.pdf" -file document.pdf
+
+  # Use Vault for configuration
+  VAULT_ENABLED=true VAULT_TOKEN=xxx %s -data "Secret message"
+
+Configuration:
+  Configuration can be provided via:
+  1. YAML config file (-config flag)
+  2. Environment variables (CLIENT_*, VAULT_*)
+  3. Command line flags (highest priority)
+
+`, os.Args[0], os.Args[0], os.Args[0], os.Args[0])
+}
+
+func init() {
+	flag.Usage = printUsage
 }

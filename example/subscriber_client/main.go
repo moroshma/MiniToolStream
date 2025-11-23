@@ -80,6 +80,10 @@ func main() {
 		// Test channels: save to ./downloads/test/
 		"test.debug":     testHandler,
 		"test.fullchain": testHandler,
+		"test.config":    testHandler,
+		"test.default":   testHandler,
+		"test.envvar":    testHandler,
+		"test.vault":     testHandler,
 		"final.test":     testHandler,
 		"test.single":    testHandler,
 		"test.multi.1":   testHandler,

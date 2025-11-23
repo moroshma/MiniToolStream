@@ -1,0 +1,19 @@
+# MiniToolStream Publisher Client Configuration Example
+
+client:
+  server_address: localhost:50051
+  timeout: 10s
+  default_subject: test.default
+  default_content_type: text/plain
+  batch_size: 10
+
+vault:
+  enabled: false
+  address: http://localhost:8200
+  token: ""
+  # token_path: /var/run/secrets/vault/token
+  # secrets_path: minitoolstream/publisher
+
+logger:
+  level: info  # debug, info, warn, error
+  format: console  # console or json
