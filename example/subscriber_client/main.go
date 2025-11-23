@@ -1,149 +1,79 @@
 package main
 
 import (
-	"context"
 	"flag"
-	"fmt"
-	"io"
 	"log"
 	"os"
+	"os/signal"
+	"syscall"
 
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
-
-	pb "github.com/moroshma/MiniToolStream/model"
+	"github.com/moroshma/MiniToolStream/example/subscriber_client/internal/handler"
+	"github.com/moroshma/MiniToolStream/example/subscriber_client/internal/subscriber"
 )
 
 var (
 	serverAddr  = flag.String("server", "localhost:50052", "MiniToolStreamEgress gRPC server address")
-	subject     = flag.String("subject", "terminator.diff", "Subject/channel to subscribe to")
-	durableName = flag.String("durable", "test-subscriber", "Durable consumer name")
+	durableName = flag.String("durable", "multi-subscriber", "Durable consumer name")
 	outputDir   = flag.String("output", "./downloads", "Directory to save downloaded files")
+	batchSize   = flag.Int("batch", 10, "Batch size for fetching messages")
 )
 
 func main() {
 	flag.Parse()
 
-	log.Printf("MiniToolStream Subscriber Client")
+	log.Printf("MiniToolStream Multi-Channel Subscriber")
 	log.Printf("Connecting to: %s", *serverAddr)
-	log.Printf("Subject: %s", *subject)
 	log.Printf("Durable Name: %s", *durableName)
+	log.Printf("Output Directory: %s", *outputDir)
 
-	// Create output directory
-	if err := os.MkdirAll(*outputDir, 0755); err != nil {
-		log.Fatalf("Failed to create output directory: %v", err)
-	}
-
-	// Connect to MiniToolStreamEgress gRPC server
-	conn, err := grpc.NewClient(*serverAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		log.Fatalf("Failed to connect: %v", err)
-	}
-	defer conn.Close()
-
-	client := pb.NewEgressServiceClient(conn)
-	ctx := context.Background()
-
-	// First, subscribe to notifications
-	log.Printf("Starting subscription...")
-	subscribeReq := &pb.SubscribeRequest{
-		Subject:     *subject,
+	// Create subscriber manager
+	config := &subscriber.Config{
+		ServerAddr:  *serverAddr,
 		DurableName: *durableName,
+		BatchSize:   int32(*batchSize),
 	}
 
-	subscribeStream, err := client.Subscribe(ctx, subscribeReq)
+	manager, err := subscriber.NewManager(config)
 	if err != nil {
-		log.Fatalf("Failed to subscribe: %v", err)
+		log.Fatalf("Failed to create subscriber manager: %v", err)
+	}
+	defer manager.Stop()
+
+	// Register handlers for different subjects
+	// This is the pattern similar to your example
+	manager.RegisterHandlers(map[string]handler.MessageHandler{
+		// Images: save to ./downloads/images/
+		"images.jpeg": handler.NewImageProcessorHandler(*outputDir + "/images"),
+		"images.png":  handler.NewImageProcessorHandler(*outputDir + "/images"),
+
+		// Documents: save to ./downloads/documents/
+		"documents.pdf":  handler.NewFileSaverHandler(*outputDir + "/documents"),
+		"documents.json": handler.NewFileSaverHandler(*outputDir + "/documents"),
+
+		// Test channels: save to ./downloads/test/
+		"test.debug":     handler.NewFileSaverHandler(*outputDir + "/test"),
+		"test.fullchain": handler.NewFileSaverHandler(*outputDir + "/test"),
+		"final.test":     handler.NewFileSaverHandler(*outputDir + "/test"),
+
+		// Logs: just log without saving
+		"logs.system": handler.NewLoggerHandler("SYSTEM"),
+		"logs.app":    handler.NewLoggerHandler("APP"),
+	})
+
+	// Start all subscriptions
+	if err := manager.Start(); err != nil {
+		log.Fatalf("Failed to start subscriptions: %v", err)
 	}
 
-	// Listen for notifications in a goroutine
-	notificationChan := make(chan *pb.Notification, 10)
-	go func() {
-		for {
-			notification, err := subscribeStream.Recv()
-			if err == io.EOF {
-				log.Printf("Subscribe stream closed")
-				close(notificationChan)
-				return
-			}
-			if err != nil {
-				log.Printf("Subscribe error: %v", err)
-				close(notificationChan)
-				return
-			}
-			log.Printf("📬 Notification received: subject=%s, sequence=%d", notification.Subject, notification.Sequence)
-			notificationChan <- notification
-		}
-	}()
+	log.Printf("✓ All subscriptions started, waiting for messages...")
+	log.Printf("Press Ctrl+C to stop")
 
-	// Process notifications
-	log.Printf("Waiting for notifications... (press Ctrl+C to exit)")
-	for notification := range notificationChan {
-		log.Printf("Processing notification for sequence %d", notification.Sequence)
+	// Wait for interrupt signal
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+	<-sigChan
 
-		// Fetch messages
-		fetchReq := &pb.FetchRequest{
-			Subject:     notification.Subject,
-			DurableName: *durableName,
-			BatchSize:   10,
-		}
-
-		fetchStream, err := client.Fetch(ctx, fetchReq)
-		if err != nil {
-			log.Printf("Failed to fetch: %v", err)
-			continue
-		}
-
-		// Receive messages
-		messageCount := 0
-		for {
-			msg, err := fetchStream.Recv()
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				log.Printf("Fetch error: %v", err)
-				break
-			}
-
-			messageCount++
-			log.Printf("📨 Message received: sequence=%d, subject=%s, data_size=%d",
-				msg.Sequence, msg.Subject, len(msg.Data))
-
-			// Print headers
-			if len(msg.Headers) > 0 {
-				log.Printf("   Headers: %v", msg.Headers)
-			}
-
-			// Save data to file if present
-			if len(msg.Data) > 0 {
-				filename := fmt.Sprintf("%s/%s_seq_%d", *outputDir, msg.Subject, msg.Sequence)
-
-				// Add extension based on content-type
-				if contentType, ok := msg.Headers["content-type"]; ok {
-					switch contentType {
-					case "image/jpeg":
-						filename += ".jpg"
-					case "image/png":
-						filename += ".png"
-					case "text/plain":
-						filename += ".txt"
-					case "application/json":
-						filename += ".json"
-					}
-				}
-
-				err = os.WriteFile(filename, msg.Data, 0644)
-				if err != nil {
-					log.Printf("   Failed to save file: %v", err)
-				} else {
-					log.Printf("   ✓ Saved to: %s", filename)
-				}
-			}
-		}
-
-		log.Printf("Fetched %d messages", messageCount)
-	}
-
-	log.Printf("Subscriber client finished")
+	log.Printf("\nShutting down...")
+	manager.Stop()
+	log.Printf("✓ Subscriber client finished")
 }
