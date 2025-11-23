@@ -7,8 +7,9 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/moroshma/MiniToolStream/example/subscriber_client/internal/handler"
-	"github.com/moroshma/MiniToolStream/example/subscriber_client/internal/subscriber"
+	"github.com/moroshma/MiniToolStream/pkg/minitoolstream/subscriber"
+	"github.com/moroshma/MiniToolStream/pkg/minitoolstream/subscriber/domain"
+	"github.com/moroshma/MiniToolStream/pkg/minitoolstream/subscriber/handler"
 )
 
 var (
@@ -26,42 +27,72 @@ func main() {
 	log.Printf("Durable Name: %s", *durableName)
 	log.Printf("Output Directory: %s", *outputDir)
 
-	// Create subscriber manager
-	config := &subscriber.Config{
-		ServerAddr:  *serverAddr,
-		DurableName: *durableName,
-		BatchSize:   int32(*batchSize),
+	// Create subscriber using the library
+	sub, err := subscriber.NewSubscriberBuilder(*serverAddr).
+		WithDurableName(*durableName).
+		WithBatchSize(int32(*batchSize)).
+		Build()
+	if err != nil {
+		log.Fatalf("Failed to create subscriber: %v", err)
+	}
+	defer sub.Stop()
+
+	// Create handlers
+	imageHandler, err := handler.NewImageProcessor(&handler.ImageProcessorConfig{
+		OutputDir: *outputDir + "/images",
+	})
+	if err != nil {
+		log.Fatalf("Failed to create image handler: %v", err)
 	}
 
-	manager, err := subscriber.NewManager(config)
+	documentHandler, err := handler.NewFileSaver(&handler.FileSaverConfig{
+		OutputDir: *outputDir + "/documents",
+	})
 	if err != nil {
-		log.Fatalf("Failed to create subscriber manager: %v", err)
+		log.Fatalf("Failed to create document handler: %v", err)
 	}
-	defer manager.Stop()
+
+	testHandler, err := handler.NewFileSaver(&handler.FileSaverConfig{
+		OutputDir: *outputDir + "/test",
+	})
+	if err != nil {
+		log.Fatalf("Failed to create test handler: %v", err)
+	}
+
+	systemLogHandler := handler.NewLoggerHandler(&handler.LoggerHandlerConfig{
+		Prefix: "SYSTEM",
+	})
+
+	appLogHandler := handler.NewLoggerHandler(&handler.LoggerHandlerConfig{
+		Prefix: "APP",
+	})
 
 	// Register handlers for different subjects
-	// This is the pattern similar to your example
-	manager.RegisterHandlers(map[string]handler.MessageHandler{
+	sub.RegisterHandlers(map[string]domain.MessageHandler{
 		// Images: save to ./downloads/images/
-		"images.jpeg": handler.NewImageProcessorHandler(*outputDir + "/images"),
-		"images.png":  handler.NewImageProcessorHandler(*outputDir + "/images"),
+		"images.jpeg": imageHandler,
+		"images.png":  imageHandler,
 
 		// Documents: save to ./downloads/documents/
-		"documents.pdf":  handler.NewFileSaverHandler(*outputDir + "/documents"),
-		"documents.json": handler.NewFileSaverHandler(*outputDir + "/documents"),
+		"documents.pdf":  documentHandler,
+		"documents.json": documentHandler,
 
 		// Test channels: save to ./downloads/test/
-		"test.debug":     handler.NewFileSaverHandler(*outputDir + "/test"),
-		"test.fullchain": handler.NewFileSaverHandler(*outputDir + "/test"),
-		"final.test":     handler.NewFileSaverHandler(*outputDir + "/test"),
+		"test.debug":     testHandler,
+		"test.fullchain": testHandler,
+		"final.test":     testHandler,
+		"test.single":    testHandler,
+		"test.multi.1":   testHandler,
+		"test.multi.2":   testHandler,
+		"test.multi.3":   testHandler,
 
 		// Logs: just log without saving
-		"logs.system": handler.NewLoggerHandler("SYSTEM"),
-		"logs.app":    handler.NewLoggerHandler("APP"),
+		"logs.system": systemLogHandler,
+		"logs.app":    appLogHandler,
 	})
 
 	// Start all subscriptions
-	if err := manager.Start(); err != nil {
+	if err := sub.Start(); err != nil {
 		log.Fatalf("Failed to start subscriptions: %v", err)
 	}
 
@@ -74,6 +105,6 @@ func main() {
 	<-sigChan
 
 	log.Printf("\nShutting down...")
-	manager.Stop()
+	sub.Stop()
 	log.Printf("✓ Subscriber client finished")
 }
