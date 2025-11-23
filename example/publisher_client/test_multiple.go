@@ -7,7 +7,7 @@ import (
 
 	"github.com/moroshma/MiniToolStreamConnector/minitoolstream_connector"
 	"github.com/moroshma/MiniToolStreamConnector/minitoolstream_connector/domain"
-	"github.com/moroshma/MiniToolStreamConnector/minitoolstream_connector/handler"
+	"github.com/moroshma/MiniToolStreamConnector/minitoolstream_connector"
 )
 
 func main() {
@@ -29,30 +29,30 @@ func main() {
 	log.Printf("Registering multiple handlers...")
 	pub.RegisterHandlers([]domain.MessagePreparer{
 		// Images
-		handler.NewImageHandler(&handler.ImageHandlerConfig{
+		minitoolstream_connector.NewImageHandler(&minitoolstream_connector.ImageHandlerConfig{
 			Subject:   "images.jpeg",
 			ImagePath: "/Users/moroshma/go/MiniToolStream/example/publisher_client/tst.jpeg",
 		}),
 
 		// Raw data
-		handler.NewDataHandler(&handler.DataHandlerConfig{
+		minitoolstream_connector.NewDataHandler(&minitoolstream_connector.DataHandlerConfig{
 			Subject:     "logs.system",
 			Data:        []byte("System initialized"),
 			ContentType: "text/plain",
 		}),
-		handler.NewDataHandler(&handler.DataHandlerConfig{
+		minitoolstream_connector.NewDataHandler(&minitoolstream_connector.DataHandlerConfig{
 			Subject:     "logs.app",
 			Data:        []byte("Application started"),
 			ContentType: "text/plain",
 		}),
 
 		// Test data
-		handler.NewDataHandler(&handler.DataHandlerConfig{
+		minitoolstream_connector.NewDataHandler(&minitoolstream_connector.DataHandlerConfig{
 			Subject:     "test.debug",
 			Data:        []byte("Debug message #1"),
 			ContentType: "text/plain",
 		}),
-		handler.NewDataHandler(&handler.DataHandlerConfig{
+		minitoolstream_connector.NewDataHandler(&minitoolstream_connector.DataHandlerConfig{
 			Subject:     "final.test",
 			Data:        []byte("Final test message"),
 			ContentType: "text/plain",

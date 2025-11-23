@@ -5,7 +5,7 @@ go 1.24.0
 require (
 	github.com/hashicorp/vault/api v1.22.0
 	github.com/kelseyhightower/envconfig v1.4.0
-	github.com/moroshma/MiniToolStreamConnector/minitoolstream_connector v0.0.4
+	github.com/moroshma/MiniToolStreamConnector/minitoolstream_connector v0.1.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -23,7 +23,7 @@ require (
 	github.com/hashicorp/hcl v1.0.1-vault-7 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
-	github.com/moroshma/MiniToolStreamConnector/model v0.0.4 // indirect
+	github.com/moroshma/MiniToolStreamConnector/model v0.1.0 // indirect
 	github.com/ryanuber/go-glob v1.0.0 // indirect
 	golang.org/x/net v0.46.1-0.20251013234738-63d1a5100f82 // indirect
 	golang.org/x/sys v0.37.0 // indirect
