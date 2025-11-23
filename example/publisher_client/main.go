@@ -9,7 +9,6 @@ import (
 
 	"github.com/moroshma/MiniToolStream/example/publisher_client/internal/config"
 	"github.com/moroshma/MiniToolStreamConnector/minitoolstream_connector"
-	"github.com/moroshma/MiniToolStreamConnector/minitoolstream_connector/handler"
 )
 
 var (
@@ -69,7 +68,7 @@ func main() {
 			log.Fatalf("Subject is required when using -image (use -subject or set default_subject in config)")
 		}
 		log.Printf("Publishing image: %s -> %s", *imagePath, publishSubject)
-		pub.RegisterHandler(handler.NewImageHandler(&handler.ImageHandlerConfig{
+		pub.RegisterHandler(minitoolstream_connector.NewImageHandler(&minitoolstream_connector.ImageHandlerConfig{
 			Subject:   publishSubject,
 			ImagePath: *imagePath,
 		}))
@@ -81,7 +80,7 @@ func main() {
 			log.Fatalf("Subject is required when using -file (use -subject or set default_subject in config)")
 		}
 		log.Printf("Publishing file: %s -> %s", *filePath, publishSubject)
-		pub.RegisterHandler(handler.NewFileHandler(&handler.FileHandlerConfig{
+		pub.RegisterHandler(minitoolstream_connector.NewFileHandler(&minitoolstream_connector.FileHandlerConfig{
 			Subject:  publishSubject,
 			FilePath: *filePath,
 		}))
@@ -93,7 +92,7 @@ func main() {
 			log.Fatalf("Subject is required when using -data (use -subject or set default_subject in config)")
 		}
 		log.Printf("Publishing data: %d bytes -> %s", len(*data), publishSubject)
-		pub.RegisterHandler(handler.NewDataHandler(&handler.DataHandlerConfig{
+		pub.RegisterHandler(minitoolstream_connector.NewDataHandler(&minitoolstream_connector.DataHandlerConfig{
 			Subject:     publishSubject,
 			Data:        []byte(*data),
 			ContentType: cfg.Client.DefaultContentType,

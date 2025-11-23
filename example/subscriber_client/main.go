@@ -7,9 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/moroshma/MiniToolStreamConnector/minitoolstream_connector/subscriber"
-	"github.com/moroshma/MiniToolStreamConnector/minitoolstream_connector/subscriber/domain"
-	"github.com/moroshma/MiniToolStreamConnector/minitoolstream_connector/subscriber/handler"
+	"github.com/moroshma/MiniToolStreamConnector/minitoolstream_connector"
 )
 
 var (
@@ -28,7 +26,7 @@ func main() {
 	log.Printf("Output Directory: %s", *outputDir)
 
 	// Create subscriber using the library
-	sub, err := subscriber.NewSubscriberBuilder(*serverAddr).
+	sub, err := minitoolstream_connector.NewSubscriberBuilder(*serverAddr).
 		WithDurableName(*durableName).
 		WithBatchSize(int32(*batchSize)).
 		Build()
@@ -38,37 +36,37 @@ func main() {
 	defer sub.Stop()
 
 	// Create handlers
-	imageHandler, err := handler.NewImageProcessor(&handler.ImageProcessorConfig{
+	imageHandler, err := minitoolstream_connector.NewImageProcessor(&minitoolstream_connector.ImageProcessorConfig{
 		OutputDir: *outputDir + "/images",
 	})
 	if err != nil {
 		log.Fatalf("Failed to create image handler: %v", err)
 	}
 
-	documentHandler, err := handler.NewFileSaver(&handler.FileSaverConfig{
+	documentHandler, err := minitoolstream_connector.NewFileSaver(&minitoolstream_connector.FileSaverConfig{
 		OutputDir: *outputDir + "/documents",
 	})
 	if err != nil {
 		log.Fatalf("Failed to create document handler: %v", err)
 	}
 
-	testHandler, err := handler.NewFileSaver(&handler.FileSaverConfig{
+	testHandler, err := minitoolstream_connector.NewFileSaver(&minitoolstream_connector.FileSaverConfig{
 		OutputDir: *outputDir + "/test",
 	})
 	if err != nil {
 		log.Fatalf("Failed to create test handler: %v", err)
 	}
 
-	systemLogHandler := handler.NewLoggerHandler(&handler.LoggerHandlerConfig{
+	systemLogHandler := minitoolstream_connector.NewLoggerHandler(&minitoolstream_connector.LoggerHandlerConfig{
 		Prefix: "SYSTEM",
 	})
 
-	appLogHandler := handler.NewLoggerHandler(&handler.LoggerHandlerConfig{
+	appLogHandler := minitoolstream_connector.NewLoggerHandler(&minitoolstream_connector.LoggerHandlerConfig{
 		Prefix: "APP",
 	})
 
 	// Register handlers for different subjects
-	sub.RegisterHandlers(map[string]domain.MessageHandler{
+	sub.RegisterHandlers(map[string]minitoolstream_connector.MessageHandler{
 		// Images: save to ./downloads/images/
 		"images.jpeg": imageHandler,
 		"images.png":  imageHandler,

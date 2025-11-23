@@ -7,7 +7,7 @@ import (
 
 	"github.com/moroshma/MiniToolStreamConnector/minitoolstream_connector"
 	"github.com/moroshma/MiniToolStreamConnector/minitoolstream_connector/domain"
-	"github.com/moroshma/MiniToolStreamConnector/minitoolstream_connector/handler"
+	"github.com/moroshma/MiniToolStreamConnector/minitoolstream_connector"
 )
 
 func main() {
@@ -47,7 +47,7 @@ func testSingleMessage() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	dataHandler := handler.NewDataHandler(&handler.DataHandlerConfig{
+	dataHandler := minitoolstream_connector.NewDataHandler(&minitoolstream_connector.DataHandlerConfig{
 		Subject:     "test.single",
 		Data:        []byte("Single test message"),
 		ContentType: "text/plain",
@@ -70,7 +70,7 @@ func testImageUpload() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	imageHandler := handler.NewImageHandler(&handler.ImageHandlerConfig{
+	imageHandler := minitoolstream_connector.NewImageHandler(&minitoolstream_connector.ImageHandlerConfig{
 		Subject:   "images.comprehensive",
 		ImagePath: "/Users/moroshma/go/MiniToolStream/example/publisher_client/tst.jpeg",
 	})
@@ -93,22 +93,22 @@ func testMultipleMessages() {
 	defer cancel()
 
 	messages := []domain.MessagePreparer{
-		handler.NewDataHandler(&handler.DataHandlerConfig{
+		minitoolstream_connector.NewDataHandler(&minitoolstream_connector.DataHandlerConfig{
 			Subject:     "test.multi.1",
 			Data:        []byte("Message 1"),
 			ContentType: "text/plain",
 		}),
-		handler.NewDataHandler(&handler.DataHandlerConfig{
+		minitoolstream_connector.NewDataHandler(&minitoolstream_connector.DataHandlerConfig{
 			Subject:     "test.multi.2",
 			Data:        []byte("Message 2"),
 			ContentType: "text/plain",
 		}),
-		handler.NewDataHandler(&handler.DataHandlerConfig{
+		minitoolstream_connector.NewDataHandler(&minitoolstream_connector.DataHandlerConfig{
 			Subject:     "test.multi.3",
 			Data:        []byte("Message 3"),
 			ContentType: "text/plain",
 		}),
-		handler.NewImageHandler(&handler.ImageHandlerConfig{
+		minitoolstream_connector.NewImageHandler(&minitoolstream_connector.ImageHandlerConfig{
 			Subject:   "test.multi.image",
 			ImagePath: "/Users/moroshma/go/MiniToolStream/example/publisher_client/tst.jpeg",
 		}),
@@ -131,7 +131,7 @@ func testCustomHeaders() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	dataHandler := handler.NewDataHandler(&handler.DataHandlerConfig{
+	dataHandler := minitoolstream_connector.NewDataHandler(&minitoolstream_connector.DataHandlerConfig{
 		Subject:     "test.headers",
 		Data:        []byte("Message with custom headers"),
 		ContentType: "text/plain",
