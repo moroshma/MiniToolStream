@@ -40,7 +40,7 @@ type MinIOConfig struct {
 	AccessKeyID     string `yaml:"access_key_id" envconfig:"MINIO_ACCESS_KEY_ID" default:"minioadmin"`
 	SecretAccessKey string `yaml:"secret_access_key" envconfig:"MINIO_SECRET_ACCESS_KEY" default:"minioadmin"`
 	UseSSL          bool   `yaml:"use_ssl" envconfig:"MINIO_USE_SSL" default:"false"`
-	BucketName      string `yaml:"bucket_name" envconfig:"MINIO_BUCKET_NAME" default:"minitoolstream_connector"`
+	BucketName      string `yaml:"bucket_name" envconfig:"MINIO_BUCKET_NAME" default:"minitoolstream"`
 
 	// Vault path for credentials (optional)
 	VaultPath string `yaml:"vault_path" envconfig:"MINIO_VAULT_PATH"`

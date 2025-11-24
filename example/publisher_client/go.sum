@@ -51,10 +51,10 @@ github.com/mitchellh/go-homedir v1.1.0 h1:lukF9ziXFxDFPkA1vsr5zpc1XuPDn/wFntq5mG
 github.com/mitchellh/go-homedir v1.1.0/go.mod h1:SfyaCUpYCn1Vlf4IUYiD9fPX4A5wJrkLzIz1N1q0pr0=
 github.com/mitchellh/mapstructure v1.5.0 h1:jeMsZIYE/09sWLaz43PL7Gy6RuMjD2eJVyuac5Z2hdY=
 github.com/mitchellh/mapstructure v1.5.0/go.mod h1:bFUtVrKA4DC2yAKiSyO/QUcy7e+RRV2QTWOzhPopBRo=
-github.com/moroshma/MiniToolStreamConnector/minitoolstream_connector v0.1.0 h1:8fcGrNpxL6EFBHVXyzzO3dYH1WSmDEaaeqp1bhkoxD8=
-github.com/moroshma/MiniToolStreamConnector/minitoolstream_connector v0.1.0/go.mod h1:MIYchzVkZX+mCHj1F/BgI136WcxrTeVCrsOS2mHuDqo=
-github.com/moroshma/MiniToolStreamConnector/model v0.1.0 h1:sjaI8mnUvPWbfxdNRUqT6jeNIlNTJxqt1QJhf+14cr8=
-github.com/moroshma/MiniToolStreamConnector/model v0.1.0/go.mod h1:48sQ0NAC13JZF+777CFLun1ZZhW13aQYGRdPYnXST90=
+github.com/moroshma/MiniToolStreamConnector/minitoolstream_connector v0.1.1 h1:ZfHrE6qeyuJKuD2qTTcuGaF+yfIXiqtg+RZaE7THKCY=
+github.com/moroshma/MiniToolStreamConnector/minitoolstream_connector v0.1.1/go.mod h1:XgSoP9JDMK5BSTdo531W2Wr8389lYFXwd5hspGUc58k=
+github.com/moroshma/MiniToolStreamConnector/model v0.1.1 h1:0Q4N/wzepwt69Wnl7DkvQwoBkVtZxul1KNJxZoU+8s4=
+github.com/moroshma/MiniToolStreamConnector/model v0.1.1/go.mod h1:48sQ0NAC13JZF+777CFLun1ZZhW13aQYGRdPYnXST90=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/ryanuber/go-glob v1.0.0 h1:iQh3xXAumdQ+4Ufa5b25cRpC5TYKlno6hsv6Cb3pkBk=

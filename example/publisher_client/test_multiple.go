@@ -7,7 +7,6 @@ import (
 
 	"github.com/moroshma/MiniToolStreamConnector/minitoolstream_connector"
 	"github.com/moroshma/MiniToolStreamConnector/minitoolstream_connector/domain"
-	"github.com/moroshma/MiniToolStreamConnector/minitoolstream_connector"
 )
 
 func main() {
@@ -31,7 +30,7 @@ func main() {
 		// Images
 		minitoolstream_connector.NewImageHandler(&minitoolstream_connector.ImageHandlerConfig{
 			Subject:   "images.jpeg",
-			ImagePath: "/Users/moroshma/go/MiniToolStream/example/publisher_client/tst.jpeg",
+			ImagePath: "/Users/moroshma/go/DiplomaThesis/MiniToolStream/example/publisher_client/tst.jpeg",
 		}),
 
 		// Raw data
