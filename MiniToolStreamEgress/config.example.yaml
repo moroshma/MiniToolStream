@@ -17,7 +17,7 @@ minio:
   access_key_id: minioadmin
   secret_access_key: minioadmin
   use_ssl: false
-  bucket_name: minitoolstream_connector
+  bucket_name: minitoolstream
   # Optional: Load credentials from Vault
   # vault_path: minitoolstream_connector/minio
 

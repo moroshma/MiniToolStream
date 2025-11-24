@@ -87,6 +87,7 @@ func main() {
 		"test.multi.1":   testHandler,
 		"test.multi.2":   testHandler,
 		"test.multi.3":   testHandler,
+		"test.messages":  testHandler,
 
 		// Logs: just log without saving
 		"logs.system": systemLogHandler,
