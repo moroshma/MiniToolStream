@@ -331,24 +331,85 @@ Fetch(subject, start_sequence, limit) → batch of messages
 
 ### 4.3. Очистка данных (TTL Cleanup)
 
-**Компонент:** MiniToolStreamCleaner (отдельный сервис, опционально)
+**Архитектура:** Распределенная (Tarantool Fiber + MinIO Lifecycle Policies)
 
 ```
-1. Periodic check (e.g., every hour)
-                │
-2. Query Tarantool                     ↓
-   old_messages = delete_old_messages(ttl) [Tarantool]
-                                            │
-3. For each deleted message:              │
-   - Delete from MinIO                     │
-   MinIO.Delete(object_name)               ↓
-                                       [MinIO]
-4. Log deleted count
+┌─────────────────────────────────────────────────────────────┐
+│              TTL Cleanup Architecture                        │
+└─────────────────────────────────────────────────────────────┘
+
+Component 1: MinIO Lifecycle Policies (автоматическое удаление объектов)
+─────────────────────────────────────────────────────────────
+1. Setup (при запуске Ingress)
+   ├── Read TTL config (default + per-channel)
+   ├── Create lifecycle rules:
+   │   ├── Default rule: expiration after {default} days
+   │   └── Channel rules: expiration for {channel}_* prefix
+   └── Apply to MinIO bucket
+
+2. Runtime (автоматически MinIO)
+   ├── Periodic scan bucket objects
+   ├── Check object age vs lifecycle rules
+   └── Delete expired objects
+
+Component 2: Tarantool Background Fiber (очистка метаданных)
+─────────────────────────────────────────────────────────────
+1. Startup (при запуске Tarantool)
+   ├── Configure TTL via configure_ttl()
+   │   ├── enabled: true/false
+   │   ├── default_ttl: seconds
+   │   ├── check_interval: seconds
+   │   └── channels: map[channel]ttl
+   └── Start fiber via start_ttl_cleanup()
+
+2. Background Fiber Loop
+   ├── Sleep for check_interval
+   ├── Group messages by subject
+   ├── For each subject:
+   │   ├── Get subject-specific TTL
+   │   ├── Calculate cutoff_time = now - ttl
+   │   ├── Delete old messages (create_at < cutoff_time)
+   │   └── Log deletion count
+   └── Repeat
+
+3. Management Functions
+   ├── configure_ttl(config) - update configuration
+   ├── start_ttl_cleanup() - start background fiber
+   ├── stop_ttl_cleanup() - stop fiber gracefully
+   └── get_ttl_status() - query current status
 ```
 
-**Параметры:**
-- `TTL`: Время жизни сообщений (настраивается per-subject или глобально)
-- `CHECK_INTERVAL`: Интервал проверки (по умолчанию 1 час)
+**Конфигурация (config.yaml):**
+```yaml
+ttl:
+  enabled: true
+  default: 24h              # Глобальный TTL по умолчанию
+  channels:                 # Per-channel TTL overrides
+    - channel: "logs"
+      duration: 7d          # Логи: 7 дней
+    - channel: "metrics"
+      duration: 30d         # Метрики: 30 дней
+    - channel: "events"
+      duration: 90d         # События: 90 дней
+```
+
+**Преимущества распределенной архитектуры:**
+- **Независимость:** MinIO и Tarantool работают автономно
+- **Эффективность:** Нет централизованного сервиса с overhead
+- **Надежность:** Автоматическое восстановление после перезапуска
+- **Гибкость:** Per-channel TTL настройка
+- **Простота:** Нативные механизмы MinIO и Tarantool
+
+**Tarantool Fiber Functions:**
+- `configure_ttl(config)` — конфигурация TTL параметров
+- `start_ttl_cleanup()` — запуск background fiber
+- `stop_ttl_cleanup()` — остановка fiber
+- `get_ttl_status()` — получение статуса TTL
+
+**MinIO Lifecycle:**
+- Правила настраиваются через `SetupTTLPolicies()` в Ingress
+- Формат ID: `channel-{name}-ttl` или `default-ttl`
+- Префикс фильтр: `{channel}_*` для channel-specific rules
 
 ---
 
@@ -532,60 +593,923 @@ message UpdateConsumerPositionResponse {
 
 ### 5.3. Клиентская библиотека API (Go SDK)
 
+**Библиотека:** `github.com/moroshma/MiniToolStream/MiniToolStreamConnector`
+
+**Архитектура:** Clean Architecture с разделением на слои:
+- `domain/` — интерфейсы и доменные типы
+- `infrastructure/` — реализации (gRPC, handlers)
+- `publisher.go` / `subscriber.go` — публичные API
+
 #### 5.3.1. Publisher API
 
+**Создание Publisher:**
+
 ```go
-// Создание publisher
-publisher, err := minitoolstream.NewPublisher(serverAddr string) (*Publisher, error)
+// Базовый конструктор
+func NewPublisher(serverAddr string, opts ...grpc.DialOption) (Publisher, error)
 
-// С дополнительными параметрами
-publisher, err := minitoolstream.NewPublisherBuilder(serverAddr).
+// Параметры:
+// - serverAddr: адрес Ingress сервера (например, "localhost:50051")
+// - opts: дополнительные gRPC опции (TLS, interceptors и т.д.)
+//
+// Возвращает: Publisher интерфейс и ошибку
+
+// Пример использования:
+publisher, err := minitoolstream.NewPublisher("localhost:50051")
+if err != nil {
+    log.Fatal(err)
+}
+defer publisher.Close()
+```
+
+**Publisher Builder Pattern:**
+
+```go
+// Fluent API для создания Publisher с дополнительными параметрами
+type PublisherBuilder struct {
+    serverAddr string
+    timeout    time.Duration
+    logger     *zap.Logger
+    grpcOpts   []grpc.DialOption
+}
+
+// Методы Builder:
+func NewPublisherBuilder(serverAddr string) *PublisherBuilder
+func (b *PublisherBuilder) WithTimeout(timeout time.Duration) *PublisherBuilder
+func (b *PublisherBuilder) WithLogger(logger *zap.Logger) *PublisherBuilder
+func (b *PublisherBuilder) WithGRPCOptions(opts ...grpc.DialOption) *PublisherBuilder
+func (b *PublisherBuilder) Build() (Publisher, error)
+
+// Пример использования:
+publisher, err := minitoolstream.NewPublisherBuilder("localhost:50051").
     WithTimeout(10 * time.Second).
-    WithRetry(3).
     WithLogger(logger).
+    WithGRPCOptions(grpc.WithInsecure()).
     Build()
+```
 
-// Публикация сообщения
-result, err := publisher.Publish(ctx, &Message{
-    Subject: "orders.created",
-    Data:    data,
+**Publisher Interface:**
+
+```go
+type Publisher interface {
+    // Publish - публикация сообщения через MessagePreparer
+    // MessagePreparer позволяет использовать разные типы данных
+    Publish(ctx context.Context, preparer MessagePreparer) error
+
+    // PublishAll - пакетная публикация сообщений
+    PublishAll(ctx context.Context, preparers []MessagePreparer) error
+
+    // RegisterHandler - регистрация обработчика для определенного типа
+    RegisterHandler(preparer MessagePreparer)
+
+    // SetResultHandler - установка обработчика результатов публикации
+    SetResultHandler(handler ResultHandler)
+
+    // Close - закрытие соединения
+    Close() error
+}
+```
+
+**MessagePreparer Interface:**
+
+```go
+// MessagePreparer - интерфейс для подготовки сообщений разных типов
+type MessagePreparer interface {
+    // Prepare - подготовка protobuf сообщения для отправки
+    Prepare() (*pb.PublishRequest, error)
+}
+
+// Реализации MessagePreparer:
+// 1. ByteMessagePreparer - для произвольных байтов
+// 2. StringMessagePreparer - для текстовых данных
+// 3. FileMessagePreparer - для файлов
+// 4. ImageMessagePreparer - для изображений
+// 5. JSONMessagePreparer - для JSON объектов
+```
+
+**Примеры публикации:**
+
+```go
+// 1. Публикация байтов
+bytesPreparer := &domain.ByteMessagePreparer{
+    Subject: "events.created",
+    Data:    []byte("event data"),
     Headers: map[string]string{
-        "content-type": "application/json",
-        "source": "order-service",
+        "content-type": "application/octet-stream",
+        "source":       "api-service",
     },
-})
+}
+err := publisher.Publish(ctx, bytesPreparer)
 
-// Публикация файла
-result, err := publisher.PublishFile(ctx, "documents.pdf", "/path/to/file.pdf")
+// 2. Публикация строки
+stringPreparer := &domain.StringMessagePreparer{
+    Subject: "logs.application",
+    Message: "Application started successfully",
+    Headers: map[string]string{
+        "level": "info",
+        "app":   "myapp",
+    },
+}
+err := publisher.Publish(ctx, stringPreparer)
 
-// Публикация изображения
-result, err := publisher.PublishImage(ctx, "images.jpeg", "/path/to/image.jpg")
+// 3. Публикация файла
+filePreparer := &domain.FileMessagePreparer{
+    Subject:  "documents.pdf",
+    FilePath: "/path/to/document.pdf",
+    Headers:  map[string]string{"author": "John Doe"},
+}
+err := publisher.Publish(ctx, filePreparer)
 
-// Закрытие
-publisher.Close()
+// 4. Публикация изображения
+imagePreparer := &domain.ImageMessagePreparer{
+    Subject:  "images.uploads",
+    FilePath: "/path/to/image.jpg",
+    Headers:  map[string]string{"resolution": "1920x1080"},
+}
+err := publisher.Publish(ctx, imagePreparer)
+
+// 5. Публикация JSON
+type Order struct {
+    ID     string  `json:"id"`
+    Amount float64 `json:"amount"`
+}
+jsonPreparer := &domain.JSONMessagePreparer{
+    Subject: "orders.created",
+    Data:    &Order{ID: "123", Amount: 99.99},
+    Headers: map[string]string{"version": "v1"},
+}
+err := publisher.Publish(ctx, jsonPreparer)
+
+// 6. Пакетная публикация
+preparers := []domain.MessagePreparer{
+    bytesPreparer,
+    stringPreparer,
+    filePreparer,
+}
+err := publisher.PublishAll(ctx, preparers)
+```
+
+**ResultHandler:**
+
+```go
+// ResultHandler - callback для обработки результатов публикации
+type ResultHandler interface {
+    OnSuccess(sequence uint64, objectName string)
+    OnError(err error)
+}
+
+// Пример использования:
+type MyResultHandler struct{}
+
+func (h *MyResultHandler) OnSuccess(sequence uint64, objectName string) {
+    log.Printf("Published successfully: seq=%d, object=%s", sequence, objectName)
+}
+
+func (h *MyResultHandler) OnError(err error) {
+    log.Printf("Publish failed: %v", err)
+}
+
+publisher.SetResultHandler(&MyResultHandler{})
 ```
 
 #### 5.3.2. Subscriber API
 
+**Создание Subscriber:**
+
 ```go
-// Создание subscriber
-subscriber, err := minitoolstream.NewSubscriber(serverAddr, durableName)
+// Базовый конструктор
+func NewSubscriber(serverAddr string, durableName string, opts ...grpc.DialOption) (Subscriber, error)
 
-// Подписка на канал с обработчиком
-err = subscriber.Subscribe(ctx, "orders.created", func(msg *Message) error {
-    // Обработка сообщения
-    log.Printf("Received: %s", string(msg.Data))
+// Параметры:
+// - serverAddr: адрес Egress сервера (например, "localhost:50052")
+// - durableName: имя durable consumer (для сохранения позиции)
+// - opts: дополнительные gRPC опции
+//
+// Возвращает: Subscriber интерфейс и ошибку
+
+// Пример использования:
+subscriber, err := minitoolstream.NewSubscriber(
+    "localhost:50052",
+    "my-consumer-group",
+)
+if err != nil {
+    log.Fatal(err)
+}
+defer subscriber.Stop()
+```
+
+**Subscriber Builder Pattern:**
+
+```go
+// Fluent API для создания Subscriber с дополнительными параметрами
+type SubscriberBuilder struct {
+    serverAddr   string
+    durableName  string
+    batchSize    int32
+    pollInterval time.Duration
+    logger       *zap.Logger
+    grpcOpts     []grpc.DialOption
+}
+
+// Методы Builder:
+func NewSubscriberBuilder(serverAddr, durableName string) *SubscriberBuilder
+func (b *SubscriberBuilder) WithBatchSize(size int32) *SubscriberBuilder
+func (b *SubscriberBuilder) WithPollInterval(interval time.Duration) *SubscriberBuilder
+func (b *SubscriberBuilder) WithLogger(logger *zap.Logger) *SubscriberBuilder
+func (b *SubscriberBuilder) WithGRPCOptions(opts ...grpc.DialOption) *SubscriberBuilder
+func (b *SubscriberBuilder) Build() (Subscriber, error)
+
+// Пример использования:
+subscriber, err := minitoolstream.NewSubscriberBuilder(
+    "localhost:50052",
+    "my-consumer-group",
+).
+    WithBatchSize(50).
+    WithPollInterval(1 * time.Second).
+    WithLogger(logger).
+    Build()
+```
+
+**Subscriber Interface:**
+
+```go
+type Subscriber interface {
+    // RegisterHandler - регистрация обработчика для конкретного канала
+    RegisterHandler(subject string, handler MessageHandler)
+
+    // RegisterHandlers - регистрация нескольких обработчиков сразу
+    RegisterHandlers(handlers map[string]MessageHandler)
+
+    // Start - запуск subscriber (начинает получение сообщений)
+    Start() error
+
+    // Stop - остановка subscriber (graceful shutdown)
+    Stop()
+
+    // Wait - ожидание завершения работы
+    Wait()
+}
+```
+
+**MessageHandler Interface:**
+
+```go
+// MessageHandler - интерфейс для обработки полученных сообщений
+type MessageHandler interface {
+    Handle(msg *Message) error
+}
+
+// Message - структура полученного сообщения
+type Message struct {
+    Sequence  uint64            // Уникальный номер сообщения
+    Subject   string            // Канал
+    Data      []byte            // Полезная нагрузка
+    Headers   map[string]string // Метаданные
+    CreatedAt uint64            // Unix timestamp создания
+}
+```
+
+**Примеры использования Subscriber:**
+
+```go
+// 1. Простой обработчик с функцией
+type LogHandler struct{}
+
+func (h *LogHandler) Handle(msg *domain.Message) error {
+    log.Printf("Received message: seq=%d, subject=%s, size=%d bytes",
+        msg.Sequence, msg.Subject, len(msg.Data))
     return nil
-})
+}
 
-// Получение пакета сообщений
-messages, err := subscriber.Fetch(ctx, "orders.created", startSeq, 100)
+subscriber.RegisterHandler("logs.application", &LogHandler{})
 
-// Получение последнего sequence
-latest, err := subscriber.GetLatestSequence(ctx, "orders.created")
+// 2. Обработчик с сохранением в БД
+type OrderHandler struct {
+    db *sql.DB
+}
 
-// Остановка
+func (h *OrderHandler) Handle(msg *domain.Message) error {
+    var order Order
+    if err := json.Unmarshal(msg.Data, &order); err != nil {
+        return err
+    }
+
+    _, err := h.db.Exec("INSERT INTO orders VALUES (?, ?)", order.ID, order.Amount)
+    return err
+}
+
+subscriber.RegisterHandler("orders.created", &OrderHandler{db: db})
+
+// 3. Множественная регистрация
+handlers := map[string]domain.MessageHandler{
+    "logs.application": &LogHandler{},
+    "orders.created":   &OrderHandler{db: db},
+    "events.system":    &EventHandler{},
+}
+subscriber.RegisterHandlers(handlers)
+
+// 4. Запуск и управление жизненным циклом
+// Запуск в фоне
+go func() {
+    if err := subscriber.Start(); err != nil {
+        log.Fatalf("Subscriber failed: %v", err)
+    }
+}()
+
+// Graceful shutdown при получении сигнала
+sigChan := make(chan os.Signal, 1)
+signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+<-sigChan
+
+log.Println("Shutting down subscriber...")
 subscriber.Stop()
+subscriber.Wait()
+log.Println("Subscriber stopped")
+```
+
+#### 5.3.3. Дополнительные типы и утилиты
+
+**Domain Types:**
+
+```go
+// PublishResult - результат публикации
+type PublishResult struct {
+    Sequence   uint64
+    ObjectName string
+    Error      error
+}
+
+// SubscriptionStatus - статус подписки
+type SubscriptionStatus struct {
+    Subject         string
+    CurrentSequence uint64
+    LatestSequence  uint64
+    MessagesLag     int64
+}
+```
+
+**Infrastructure Handlers:**
+
+```go
+// Файл: infrastructure/handler/byte_handler.go
+type ByteMessageHandler struct {
+    client pb.IngressServiceClient
+}
+
+// Файл: infrastructure/handler/file_handler.go
+type FileMessageHandler struct {
+    client pb.IngressServiceClient
+}
+
+// Файл: infrastructure/handler/image_handler.go
+type ImageMessageHandler struct {
+    client pb.IngressServiceClient
+}
+
+// Каждый handler реализует логику подготовки и отправки
+// конкретного типа данных через gRPC
+```
+
+#### 5.3.4. Примеры полной интеграции
+
+**Publisher пример:**
+
+```go
+package main
+
+import (
+    "context"
+    "log"
+
+    connector "github.com/moroshma/MiniToolStream/MiniToolStreamConnector/minitoolstream_connector"
+    "github.com/moroshma/MiniToolStream/MiniToolStreamConnector/minitoolstream_connector/domain"
+)
+
+func main() {
+    // Создание publisher
+    publisher, err := connector.NewPublisher("localhost:50051")
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer publisher.Close()
+
+    // Установка обработчика результатов
+    publisher.SetResultHandler(&MyResultHandler{})
+
+    // Публикация разных типов данных
+    ctx := context.Background()
+
+    // Байты
+    err = publisher.Publish(ctx, &domain.ByteMessagePreparer{
+        Subject: "events.user.created",
+        Data:    []byte(`{"user_id": "123"}`),
+        Headers: map[string]string{"content-type": "application/json"},
+    })
+
+    // Файл
+    err = publisher.Publish(ctx, &domain.FileMessagePreparer{
+        Subject:  "documents.contracts",
+        FilePath: "./contract.pdf",
+        Headers:  map[string]string{"client": "ACME Corp"},
+    })
+
+    log.Println("All messages published successfully")
+}
+
+type MyResultHandler struct{}
+
+func (h *MyResultHandler) OnSuccess(sequence uint64, objectName string) {
+    log.Printf("✓ Published: seq=%d, object=%s", sequence, objectName)
+}
+
+func (h *MyResultHandler) OnError(err error) {
+    log.Printf("✗ Error: %v", err)
+}
+```
+
+**Subscriber пример:**
+
+```go
+package main
+
+import (
+    "log"
+    "os"
+    "os/signal"
+    "syscall"
+
+    connector "github.com/moroshma/MiniToolStream/MiniToolStreamConnector/minitoolstream_connector"
+    "github.com/moroshma/MiniToolStream/MiniToolStreamConnector/minitoolstream_connector/domain"
+)
+
+func main() {
+    // Создание subscriber
+    subscriber, err := connector.NewSubscriber(
+        "localhost:50052",
+        "my-service-consumer",
+    )
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    // Регистрация обработчиков
+    subscriber.RegisterHandlers(map[string]domain.MessageHandler{
+        "events.user.created":   &UserEventHandler{},
+        "documents.contracts":   &DocumentHandler{},
+        "logs.application":      &LogHandler{},
+    })
+
+    // Запуск в фоне
+    go func() {
+        if err := subscriber.Start(); err != nil {
+            log.Fatalf("Subscriber error: %v", err)
+        }
+    }()
+
+    log.Println("Subscriber started, waiting for messages...")
+
+    // Graceful shutdown
+    sigChan := make(chan os.Signal, 1)
+    signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+    <-sigChan
+
+    log.Println("Shutting down...")
+    subscriber.Stop()
+    subscriber.Wait()
+    log.Println("Shutdown complete")
+}
+
+// Обработчики
+type UserEventHandler struct{}
+func (h *UserEventHandler) Handle(msg *domain.Message) error {
+    log.Printf("User event: %s", string(msg.Data))
+    return nil
+}
+
+type DocumentHandler struct{}
+func (h *DocumentHandler) Handle(msg *domain.Message) error {
+    log.Printf("Document received: %d bytes", len(msg.Data))
+    // Сохранение файла
+    return nil
+}
+
+type LogHandler struct{}
+func (h *LogHandler) Handle(msg *domain.Message) error {
+    log.Printf("Log: %s", string(msg.Data))
+    return nil
+}
+```
+
+### 5.4. Tarantool Functions API
+
+**Файл:** `tarantool/init.lua`
+
+Tarantool предоставляет набор Lua функций для работы с метаданными сообщений, управления consumer positions и TTL cleanup.
+
+#### 5.4.1. Sequence Management
+
+**get_next_sequence()**
+```lua
+function get_next_sequence()
+-- Возвращает следующий глобальный sequence number
+-- Атомарная инкрементация in-memory счетчика
+--
+-- Returns: uint64 - следующий sequence
+```
+
+#### 5.4.2. Message Operations
+
+**publish_message(subject, headers)**
+```lua
+function publish_message(subject, headers)
+-- Публикация нового сообщения
+--
+-- Параметры:
+--   subject: string - название канала
+--   headers: table - map заголовков (может быть пустым)
+--
+-- Возвращает: uint64 - sequence number опубликованного сообщения
+--
+-- Действия:
+--   1. Генерация sequence через get_next_sequence()
+--   2. Создание object_name = "{subject}_{sequence}"
+--   3. Запись в space 'message'
+```
+
+**get_message_by_sequence(sequence)**
+```lua
+function get_message_by_sequence(sequence)
+-- Получение сообщения по sequence number
+--
+-- Параметры:
+--   sequence: uint64 - номер сообщения
+--
+-- Возвращает: tuple или nil
+--   [sequence, headers, object_name, subject, create_at]
+```
+
+**get_message_by_sequence_decoded(sequence)**
+```lua
+function get_message_by_sequence_decoded(sequence)
+-- Получение сообщения в виде таблицы с именованными полями
+--
+-- Параметры:
+--   sequence: uint64 - номер сообщения
+--
+-- Возвращает: table или nil
+--   {
+--     sequence: uint64,
+--     headers: map,
+--     object_name: string,
+--     subject: string,
+--     create_at: uint64
+--   }
+```
+
+**get_messages_by_subject(subject, start_sequence, limit)**
+```lua
+function get_messages_by_subject(subject, start_sequence, limit)
+-- Получение пакета сообщений по каналу
+--
+-- Параметры:
+--   subject: string - название канала
+--   start_sequence: uint64 - начальный sequence (включительно)
+--   limit: number - максимальное количество сообщений
+--
+-- Возвращает: array of tuples
+--   Использует индекс 'subject_sequence' для эффективного поиска
+```
+
+**get_latest_sequence_for_subject(subject)**
+```lua
+function get_latest_sequence_for_subject(subject)
+-- Получение последнего sequence для канала
+--
+-- Параметры:
+--   subject: string - название канала
+--
+-- Возвращает: uint64 - последний sequence или 0 если нет сообщений
+```
+
+**get_subject_message_count(subject)**
+```lua
+function get_subject_message_count(subject)
+-- Подсчет количества сообщений в канале
+--
+-- Параметры:
+--   subject: string - название канала
+--
+-- Возвращает: uint64 - количество сообщений
+```
+
+#### 5.4.3. Consumer Management
+
+**update_consumer_position(durable_name, subject, last_sequence)**
+```lua
+function update_consumer_position(durable_name, subject, last_sequence)
+-- Обновление позиции durable consumer
+--
+-- Параметры:
+--   durable_name: string - имя consumer group
+--   subject: string - название канала
+--   last_sequence: uint64 - последний прочитанный sequence
+--
+-- Возвращает: bool - true
+--
+-- Действия:
+--   - Если позиция не существует - создает (INSERT)
+--   - Если существует - обновляет (UPDATE)
+```
+
+**get_consumer_position(durable_name, subject)**
+```lua
+function get_consumer_position(durable_name, subject)
+-- Получение текущей позиции consumer
+--
+-- Параметры:
+--   durable_name: string - имя consumer group
+--   subject: string - название канала
+--
+-- Возвращает: uint64 - last_sequence или 0 если не найдено
+```
+
+**get_consumers_by_subject(subject)**
+```lua
+function get_consumers_by_subject(subject)
+-- Получение всех consumers подписанных на канал
+--
+-- Параметры:
+--   subject: string - название канала
+--
+-- Возвращает: array of tuples
+--   [{durable_name, subject, last_sequence}, ...]
+```
+
+#### 5.4.4. TTL Management Functions
+
+**configure_ttl(config)**
+```lua
+function configure_ttl(config)
+-- Конфигурация TTL параметров
+--
+-- Параметры:
+--   config: table
+--     {
+--       enabled: bool,              -- включить/выключить TTL
+--       default_ttl: number,        -- TTL по умолчанию (секунды)
+--       check_interval: number,     -- интервал проверки (секунды)
+--       channels: table             -- map[channel_name] = ttl_seconds
+--     }
+--
+-- Возвращает: bool - true
+--
+-- Действия:
+--   1. Обновляет глобальную конфигурацию ttl_config
+--   2. Перезапускает TTL fiber если enabled=true
+--   3. Останавливает fiber если enabled=false
+--
+-- Пример:
+--   configure_ttl({
+--     enabled = true,
+--     default_ttl = 86400,  -- 24 часа
+--     check_interval = 3600, -- 1 час
+--     channels = {
+--       ["logs"] = 604800,     -- 7 дней
+--       ["metrics"] = 2592000  -- 30 дней
+--     }
+--   })
+```
+
+**start_ttl_cleanup()**
+```lua
+function start_ttl_cleanup()
+-- Запуск background fiber для TTL cleanup
+--
+-- Возвращает: bool
+--   true - fiber запущен успешно
+--   false - TTL отключен или fiber уже работает
+--
+-- Действия:
+--   1. Проверяет что TTL включен
+--   2. Создает новый fiber если не запущен
+--   3. Fiber периодически сканирует и удаляет старые записи
+```
+
+**stop_ttl_cleanup()**
+```lua
+function stop_ttl_cleanup()
+-- Остановка background fiber
+--
+-- Возвращает: bool - true
+--
+-- Действия:
+--   1. Устанавливает ttl_config.enabled = false
+--   2. Ждет завершения fiber (max 5 секунд)
+--   3. Если не завершился - force cancel
+```
+
+**get_ttl_status()**
+```lua
+function get_ttl_status()
+-- Получение текущего статуса TTL
+--
+-- Возвращает: table
+--   {
+--     enabled: bool,              -- TTL включен
+--     default_ttl: number,        -- TTL по умолчанию
+--     check_interval: number,     -- интервал проверки
+--     fiber_running: bool,        -- fiber работает
+--     channels: table             -- per-channel TTL
+--   }
+```
+
+**delete_old_messages(ttl_seconds)**
+```lua
+function delete_old_messages(ttl_seconds)
+-- Удаление старых сообщений (legacy, используется только для manual cleanup)
+--
+-- Параметры:
+--   ttl_seconds: number - время жизни в секундах
+--
+-- Возвращает: deleted_count, deleted_messages
+--   deleted_count: number - количество удаленных
+--   deleted_messages: array - массив удаленных сообщений
+--     [{sequence, subject, object_name}, ...]
+--
+-- Примечание:
+--   В production используется background fiber через start_ttl_cleanup()
+```
+
+#### 5.4.5. Monitoring and Statistics
+
+**get_new_messages_count(subject, durable_name, since_sequence)**
+```lua
+function get_new_messages_count(subject, durable_name, since_sequence)
+-- Подсчет новых сообщений для consumer
+--
+-- Параметры:
+--   subject: string - название канала
+--   durable_name: string (опционально) - имя consumer
+--   since_sequence: uint64 (опционально) - позиция
+--
+-- Возвращает: uint64 - количество новых сообщений
+--
+-- Логика:
+--   - Если указан durable_name - использует позицию из БД
+--   - Если указан since_sequence - использует его
+--   - Иначе - считает все сообщения
+```
+
+**check_new_messages(subject, durable_name)**
+```lua
+function check_new_messages(subject, durable_name)
+-- Проверка наличия новых сообщений для consumer
+--
+-- Параметры:
+--   subject: string - название канала
+--   durable_name: string - имя consumer
+--
+-- Возвращает: table
+--   {
+--     has_new: bool,              -- есть ли новые
+--     latest_sequence: uint64,    -- последний sequence
+--     consumer_position: uint64,  -- позиция consumer
+--     new_count: number           -- количество новых
+--   }
+--
+-- Используется для Subscribe notifications
+```
+
+#### 5.4.6. TTL Background Fiber (Internal)
+
+**ttl_cleanup_fiber()**
+```lua
+local function ttl_cleanup_fiber()
+-- Background корутина для автоматической очистки
+--
+-- Логика работы:
+--   1. Бесконечный цикл пока ttl_config.enabled = true
+--   2. Sleep на check_interval секунд
+--   3. Сканирование всех сообщений
+--   4. Группировка по subject
+--   5. Для каждого subject:
+--      a. Получение TTL (per-channel или default)
+--      b. Вычисление cutoff_time = now - ttl
+--      c. Удаление сообщений где create_at < cutoff_time
+--   6. Логирование количества удаленных
+--   7. Повтор цикла
+--
+-- Запуск: автоматически через start_ttl_cleanup()
+-- Остановка: через stop_ttl_cleanup()
+```
+
+**get_subject_ttl(subject)**
+```lua
+local function get_subject_ttl(subject)
+-- Получение TTL для конкретного subject (internal helper)
+--
+-- Параметры:
+--   subject: string - название канала
+--
+-- Возвращает: number - TTL в секундах
+--
+-- Логика:
+--   1. Если есть в ttl_config.channels[subject] - возвращает его
+--   2. Иначе возвращает ttl_config.default_ttl
+```
+
+#### 5.4.7. Инициализация
+
+**init_global_sequence()**
+```lua
+local function init_global_sequence()
+-- Инициализация глобального sequence счетчика
+--
+-- Вызывается: Автоматически при старте Tarantool
+--
+-- Действия:
+--   1. Находит максимальный sequence в space 'message'
+--   2. Устанавливает global_sequence = max_seq
+--   3. Логирует значение
+--
+-- Обеспечивает: Восстановление sequence после перезапуска
+```
+
+### 5.5. MinIO Repository Functions
+
+**Файл:** `MiniToolStreamIngress/internal/repository/minio/client.go`
+
+#### SetupTTLPolicies(ctx, ttlConfig)
+
+```go
+func (r *Repository) SetupTTLPolicies(ctx context.Context, ttlConfig config.TTLConfig) error
+// Настройка MinIO lifecycle policies для автоматического удаления объектов
+//
+// Параметры:
+//   ctx: context.Context - контекст выполнения
+//   ttlConfig: config.TTLConfig - конфигурация TTL
+//
+// Возвращает: error или nil
+//
+// Действия:
+//   1. Создает lifecycle.Configuration
+//   2. Добавляет default rule (expiration после X дней)
+//   3. Для каждого channel из config.Channels:
+//      a. Создает rule с ID "channel-{name}-ttl"
+//      b. Устанавливает prefix filter "{channel}_"
+//      c. Устанавливает expiration days
+//   4. Применяет конфигурацию к bucket через SetBucketLifecycle
+//
+// Пример:
+//   ttlConfig := config.TTLConfig{
+//     Enabled: true,
+//     Default: 24 * time.Hour,
+//     Channels: []config.ChannelTTLConfig{
+//       {Channel: "logs", Duration: 7 * 24 * time.Hour},
+//       {Channel: "metrics", Duration: 30 * 24 * time.Hour},
+//     },
+//   }
+//   err := repo.SetupTTLPolicies(ctx, ttlConfig)
+```
+
+### 5.6. Tarantool Repository Functions
+
+**Файл:** `MiniToolStreamIngress/internal/repository/tarantool/client.go`
+
+#### StartTTLCleanup(ttlConfig)
+
+```go
+func (r *Repository) StartTTLCleanup(ttlConfig config.TTLConfig) error
+// Запуск Tarantool background fiber для TTL cleanup
+//
+// Параметры:
+//   ttlConfig: config.TTLConfig - конфигурация TTL
+//
+// Возвращает: error или nil
+//
+// Действия:
+//   1. Преобразует config.TTLConfig в Lua table
+//   2. Создает map для per-channel TTL
+//   3. Вызывает Tarantool функцию configure_ttl()
+//   4. Логирует результат
+//
+// Вызывается: При старте Ingress service
+```
+
+#### GetTTLStatus()
+
+```go
+func (r *Repository) GetTTLStatus() (map[string]interface{}, error)
+// Получение статуса TTL от Tarantool
+//
+// Возвращает: map с полями:
+//   - enabled: bool
+//   - default_ttl: number
+//   - check_interval: number
+//   - fiber_running: bool
+//   - channels: map[string]int
+//
+// Используется: Для мониторинга и debugging
 ```
 
 ---
