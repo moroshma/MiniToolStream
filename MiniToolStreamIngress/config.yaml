@@ -25,5 +25,11 @@ logger:
 
 ttl:
   enabled: true
-  duration: 2m  # Delete messages older than 2 minutes (for testing)
-  interval: 30s  # Run cleanup every 30 seconds
+  default: 5m  # Default TTL for all channels: 5 minutes (for testing)
+  channels:    # Per-channel TTL overrides
+    - channel: "test"
+      duration: 2m  # Test channel: 2 minutes
+    - channel: "images"
+      duration: 3m  # Images channel: 3 minutes
+    - channel: "logs"
+      duration: 1m  # Logs channel: 1 minute

@@ -8,7 +8,7 @@ import (
 
 	"github.com/tarantool/go-tarantool/v2"
 
-	"github.com/moroshma/MiniToolStream/MiniToolStreamIngress/internal/service/ttl"
+	"github.com/moroshma/MiniToolStream/MiniToolStreamIngress/internal/config"
 	"github.com/moroshma/MiniToolStream/MiniToolStreamIngress/pkg/logger"
 )
 
@@ -156,50 +156,68 @@ func (r *Repository) PublishMessage(subject string, headers map[string]string) (
 	return sequence, nil
 }
 
-// DeleteOldMessages deletes messages older than TTL
-// Returns count of deleted messages and their info
-func (r *Repository) DeleteOldMessages(ttlSeconds int) (int, []ttl.MessageInfo, error) {
-	r.logger.Debug("Deleting old messages from Tarantool",
-		logger.Int("ttl_seconds", ttlSeconds),
+// StartTTLCleanup starts the TTL cleanup background fiber in Tarantool
+func (r *Repository) StartTTLCleanup(ttlConfig config.TTLConfig) error {
+	r.logger.Info("Configuring Tarantool TTL cleanup",
+		logger.Any("default_ttl", ttlConfig.Default),
+		logger.Int("channels_count", len(ttlConfig.Channels)),
 	)
 
-	// Call Tarantool function
-	resp, err := r.call("delete_old_messages", []interface{}{ttlSeconds})
+	// Prepare channel-specific TTL map
+	channelsMap := make(map[string]interface{})
+	for _, ch := range ttlConfig.Channels {
+		channelsMap[ch.Channel] = int(ch.Duration.Seconds())
+	}
+
+	// Prepare configuration
+	ttlConfigMap := map[string]interface{}{
+		"enabled":        ttlConfig.Enabled,
+		"default_ttl":    int(ttlConfig.Default.Seconds()),
+		"check_interval": int(ttlConfig.Default.Seconds()) / 24, // Run 24 times during TTL period
+		"channels":       channelsMap,
+	}
+
+	// Call configure_ttl function
+	resp, err := r.call("configure_ttl", []interface{}{ttlConfigMap})
 	if err != nil {
-		r.logger.Error("Failed to delete old messages from Tarantool",
-			logger.Int("ttl_seconds", ttlSeconds),
+		r.logger.Error("Failed to configure TTL in Tarantool",
 			logger.Error(err),
 		)
-		return 0, nil, fmt.Errorf("failed to delete old messages: %w", err)
+		return fmt.Errorf("failed to configure TTL: %w", err)
 	}
 
-	if len(resp) < 2 {
-		return 0, nil, fmt.Errorf("unexpected response format from Tarantool")
+	if len(resp) > 0 {
+		if success, ok := resp[0].(bool); ok && success {
+			r.logger.Info("Tarantool TTL cleanup configured successfully")
+			return nil
+		}
 	}
 
-	// Parse deleted count
-	deletedCount := int(toUint64(resp[0]))
+	return fmt.Errorf("unexpected response from configure_ttl")
+}
 
-	// Parse deleted messages info
-	var deletedMessages []ttl.MessageInfo
-	if messagesArray, ok := resp[1].([]interface{}); ok {
-		for _, msg := range messagesArray {
-			if msgMap, ok := msg.([]interface{}); ok && len(msgMap) >= 3 {
-				info := ttl.MessageInfo{
-					Sequence:   toUint64(msgMap[0]),
-					Subject:    toString(msgMap[1]),
-					ObjectName: toString(msgMap[2]),
+// GetTTLStatus returns the current TTL configuration status from Tarantool
+func (r *Repository) GetTTLStatus() (map[string]interface{}, error) {
+	resp, err := r.call("get_ttl_status", []interface{}{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get TTL status: %w", err)
+	}
+
+	if len(resp) > 0 {
+		if status, ok := resp[0].([]interface{}); ok && len(status) > 0 {
+			if statusMap, ok := status[0].(map[interface{}]interface{}); ok {
+				result := make(map[string]interface{})
+				for k, v := range statusMap {
+					if key, ok := k.(string); ok {
+						result[key] = v
+					}
 				}
-				deletedMessages = append(deletedMessages, info)
+				return result, nil
 			}
 		}
 	}
 
-	r.logger.Debug("Old messages deleted successfully",
-		logger.Int("count", deletedCount),
-	)
-
-	return deletedCount, deletedMessages, nil
+	return nil, fmt.Errorf("unexpected response format from get_ttl_status")
 }
 
 // Helper function for type conversion

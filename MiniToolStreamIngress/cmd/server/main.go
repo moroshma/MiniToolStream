@@ -17,7 +17,6 @@ import (
 	grpcHandler "github.com/moroshma/MiniToolStream/MiniToolStreamIngress/internal/delivery/grpc"
 	minioRepo "github.com/moroshma/MiniToolStream/MiniToolStreamIngress/internal/repository/minio"
 	tarantoolRepo "github.com/moroshma/MiniToolStream/MiniToolStreamIngress/internal/repository/tarantool"
-	"github.com/moroshma/MiniToolStream/MiniToolStreamIngress/internal/service/ttl"
 	"github.com/moroshma/MiniToolStream/MiniToolStreamIngress/internal/usecase"
 	"github.com/moroshma/MiniToolStream/MiniToolStreamIngress/pkg/logger"
 	pb "github.com/moroshma/MiniToolStreamConnector/model"
@@ -130,23 +129,25 @@ func main() {
 	// Initialize gRPC handler
 	ingressHandler := grpcHandler.NewIngressHandler(publishUC, appLogger)
 
-	// Initialize TTL cleanup service
-	ttlService := ttl.NewService(
-		messageRepo,
-		storageRepo,
-		ttl.Config{
-			Enabled:     cfg.TTL.Enabled,
-			TTLDuration: cfg.TTL.Duration,
-			Interval:    cfg.TTL.Interval,
-		},
-		appLogger,
-	)
-
-	// Start TTL cleanup service
-	if err := ttlService.Start(ctx); err != nil {
-		appLogger.Fatal("Failed to start TTL service", logger.Error(err))
+	// Setup MinIO lifecycle policies for TTL if enabled
+	if cfg.TTL.Enabled {
+		appLogger.Info("Setting up MinIO TTL policies")
+		if err := storageRepo.SetupTTLPolicies(ctx, cfg.TTL); err != nil {
+			appLogger.Error("Failed to setup MinIO TTL policies", logger.Error(err))
+		} else {
+			appLogger.Info("MinIO TTL policies configured successfully")
+		}
 	}
-	defer ttlService.Stop()
+
+	// Initialize Tarantool TTL background process
+	if cfg.TTL.Enabled {
+		appLogger.Info("Starting Tarantool TTL cleanup fiber")
+		if err := messageRepo.StartTTLCleanup(cfg.TTL); err != nil {
+			appLogger.Error("Failed to start Tarantool TTL cleanup", logger.Error(err))
+		} else {
+			appLogger.Info("Tarantool TTL cleanup fiber started")
+		}
+	}
 
 	// Create gRPC server
 	grpcServer := grpc.NewServer()

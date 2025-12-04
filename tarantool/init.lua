@@ -346,6 +346,171 @@ function get_subject_message_count(subject)
     return count
 end
 
+-- Global TTL configuration
+local ttl_config = {
+    enabled = false,
+    default_ttl = 86400,  -- 24 hours in seconds
+    check_interval = 3600, -- 1 hour in seconds
+    channels = {}  -- Map of channel -> ttl_seconds
+}
+
+local ttl_fiber = nil
+
+-- Function to update TTL configuration
+-- @param config table - TTL configuration {enabled, default_ttl, check_interval, channels}
+function configure_ttl(config)
+    if config.enabled ~= nil then
+        ttl_config.enabled = config.enabled
+    end
+    if config.default_ttl then
+        ttl_config.default_ttl = config.default_ttl
+    end
+    if config.check_interval then
+        ttl_config.check_interval = config.check_interval
+    end
+    if config.channels then
+        ttl_config.channels = config.channels
+    end
+
+    print('MiniToolStream: TTL configuration updated')
+    print('  Enabled: ' .. tostring(ttl_config.enabled))
+    print('  Default TTL: ' .. ttl_config.default_ttl .. ' seconds')
+    print('  Check interval: ' .. ttl_config.check_interval .. ' seconds')
+
+    -- Restart TTL fiber if enabled
+    if ttl_config.enabled then
+        start_ttl_cleanup()
+    else
+        stop_ttl_cleanup()
+    end
+
+    return true
+end
+
+-- Function to get TTL for a specific subject
+-- @param subject string - topic name
+-- @return number - TTL in seconds
+local function get_subject_ttl(subject)
+    if ttl_config.channels[subject] then
+        return ttl_config.channels[subject]
+    end
+    return ttl_config.default_ttl
+end
+
+-- Background fiber function for TTL cleanup
+local function ttl_cleanup_fiber()
+    print('MiniToolStream: TTL cleanup fiber started')
+
+    while ttl_config.enabled do
+        local start_time = os.time()
+        local total_deleted = 0
+
+        -- Group messages by subject for efficient cleanup
+        local subjects = {}
+        for _, tuple in box.space.message.index.primary:pairs() do
+            local subject = tuple[4]
+            if not subjects[subject] then
+                subjects[subject] = {}
+            end
+            table.insert(subjects[subject], {
+                sequence = tuple[1],
+                create_at = tuple[5],
+                object_name = tuple[3]
+            })
+        end
+
+        -- Process each subject with its specific TTL
+        for subject, messages in pairs(subjects) do
+            local ttl_seconds = get_subject_ttl(subject)
+            local cutoff_time = start_time - ttl_seconds
+            local deleted_count = 0
+
+            for _, msg in ipairs(messages) do
+                if msg.create_at < cutoff_time then
+                    box.space.message:delete(msg.sequence)
+                    deleted_count = deleted_count + 1
+                    total_deleted = total_deleted + 1
+                end
+            end
+
+            if deleted_count > 0 then
+                print(string.format('MiniToolStream: TTL cleanup - deleted %d messages from subject "%s" (TTL: %ds)',
+                    deleted_count, subject, ttl_seconds))
+            end
+        end
+
+        if total_deleted > 0 then
+            local duration = os.time() - start_time
+            print(string.format('MiniToolStream: TTL cleanup completed - total deleted: %d messages in %d seconds',
+                total_deleted, duration))
+        end
+
+        -- Sleep until next check
+        require('fiber').sleep(ttl_config.check_interval)
+    end
+
+    print('MiniToolStream: TTL cleanup fiber stopped')
+end
+
+-- Function to start TTL cleanup fiber
+function start_ttl_cleanup()
+    if not ttl_config.enabled then
+        print('MiniToolStream: TTL cleanup is disabled')
+        return false
+    end
+
+    -- Stop existing fiber if running
+    if ttl_fiber ~= nil and ttl_fiber:status() ~= 'dead' then
+        print('MiniToolStream: TTL cleanup fiber already running')
+        return true
+    end
+
+    -- Start new fiber
+    ttl_fiber = require('fiber').create(ttl_cleanup_fiber)
+    ttl_fiber:name('ttl_cleanup')
+
+    print('MiniToolStream: TTL cleanup fiber started successfully')
+    return true
+end
+
+-- Function to stop TTL cleanup fiber
+function stop_ttl_cleanup()
+    if ttl_fiber == nil or ttl_fiber:status() == 'dead' then
+        print('MiniToolStream: TTL cleanup fiber is not running')
+        return true
+    end
+
+    ttl_config.enabled = false
+
+    -- Wait for fiber to finish (max 5 seconds)
+    local wait_time = 0
+    while ttl_fiber:status() ~= 'dead' and wait_time < 5 do
+        require('fiber').sleep(0.5)
+        wait_time = wait_time + 0.5
+    end
+
+    if ttl_fiber:status() ~= 'dead' then
+        ttl_fiber:cancel()
+        print('MiniToolStream: TTL cleanup fiber force stopped')
+    else
+        print('MiniToolStream: TTL cleanup fiber stopped gracefully')
+    end
+
+    return true
+end
+
+-- Function to get TTL status
+function get_ttl_status()
+    local status = {
+        enabled = ttl_config.enabled,
+        default_ttl = ttl_config.default_ttl,
+        check_interval = ttl_config.check_interval,
+        fiber_running = ttl_fiber ~= nil and ttl_fiber:status() ~= 'dead',
+        channels = ttl_config.channels
+    }
+    return status
+end
+
 -- Create user for application access
 box.once('create_app_user', function()
     box.schema.user.create('minitoolstream_connector', {

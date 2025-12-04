@@ -47,11 +47,17 @@ type MinIOConfig struct {
 	VaultPath string `yaml:"vault_path" envconfig:"MINIO_VAULT_PATH"`
 }
 
-// TTLConfig represents Time-To-Live configuration for automatic cleanup
+// ChannelTTLConfig represents TTL configuration for a specific channel
+type ChannelTTLConfig struct {
+	Channel  string        `yaml:"channel"`
+	Duration time.Duration `yaml:"duration"`
+}
+
+// TTLConfig represents Time-To-Live configuration
 type TTLConfig struct {
-	Enabled  bool          `yaml:"enabled" envconfig:"TTL_ENABLED" default:"false"`
-	Duration time.Duration `yaml:"duration" envconfig:"TTL_DURATION" default:"24h"`
-	Interval time.Duration `yaml:"interval" envconfig:"TTL_INTERVAL" default:"1h"`
+	Enabled  bool               `yaml:"enabled" envconfig:"TTL_ENABLED" default:"false"`
+	Default  time.Duration      `yaml:"default" envconfig:"TTL_DEFAULT" default:"24h"`
+	Channels []ChannelTTLConfig `yaml:"channels"`
 }
 
 // VaultConfig represents HashiCorp Vault configuration
