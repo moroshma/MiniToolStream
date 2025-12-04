@@ -10,10 +10,11 @@ services:
     command: ["tarantool", "/opt/tarantool/app.lua"]
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "tarantool", "-e", "require('net.box').connect('localhost:3301'):ping()"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      test: ["CMD", "tarantool", "-e", "local ok, err = pcall(function() require('net.box').connect('localhost:3301', {wait_connected = false}):ping() end); os.exit(ok and 0 or 1)"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
     networks:
       - minitoolstream
 
@@ -95,6 +96,59 @@ services:
       - ./vault/init.sh:/init.sh:ro
     entrypoint: /bin/sh
     command: /init.sh
+    networks:
+      - minitoolstream
+
+  # MiniToolStream Ingress Service
+  ingress:
+    build:
+      context: ./MiniToolStreamIngress
+      dockerfile: Dockerfile
+    container_name: minitoolstream-ingress
+    ports:
+      - "50051:50051"
+    depends_on:
+      tarantool:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    volumes:
+      - ./MiniToolStreamIngress/config.yaml:/app/config.yaml:ro
+    command: ["/app/server", "-config", "/app/config.yaml"]
+    restart: unless-stopped
+    networks:
+      - minitoolstream
+
+  # MiniToolStream Egress Service
+  egress:
+    build:
+      context: ./MiniToolStreamEgress
+      dockerfile: Dockerfile
+    container_name: minitoolstream-egress
+    ports:
+      - "50052:50052"
+    depends_on:
+      tarantool:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      ingress:
+        condition: service_started
+    environment:
+      - SERVER_PORT=50052
+      - TARANTOOL_ADDRESS=tarantool:3301
+      - TARANTOOL_USER=minitoolstream_connector
+      - TARANTOOL_PASSWORD=changeme
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY_ID=minioadmin
+      - MINIO_SECRET_ACCESS_KEY=minioadmin
+      - MINIO_USE_SSL=false
+      - MINIO_BUCKET_NAME=minitoolstream
+      - LOG_LEVEL=info
+      - LOG_FORMAT=json
+    restart: unless-stopped
     networks:
       - minitoolstream
 

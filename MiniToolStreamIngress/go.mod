@@ -7,6 +7,7 @@ require (
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/minio/minio-go/v7 v7.0.97
 	github.com/moroshma/MiniToolStreamConnector/model v0.1.1
+	github.com/stretchr/testify v1.10.0
 	github.com/tarantool/go-tarantool/v2 v2.4.1
 	go.uber.org/zap v1.27.1
 	google.golang.org/grpc v1.77.0
@@ -15,6 +16,7 @@ require (
 
 require (
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
+	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/go-ini/ini v1.67.0 // indirect
 	github.com/go-jose/go-jose/v4 v4.1.3 // indirect
@@ -36,8 +38,10 @@ require (
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/philhofer/fwd v1.2.0 // indirect
+	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rs/xid v1.6.0 // indirect
 	github.com/ryanuber/go-glob v1.0.0 // indirect
+	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/tarantool/go-iproto v1.1.0 // indirect
 	github.com/tinylib/msgp v1.3.0 // indirect
 	github.com/vmihailenco/msgpack/v5 v5.4.1 // indirect

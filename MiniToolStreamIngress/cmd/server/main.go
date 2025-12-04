@@ -17,6 +17,7 @@ import (
 	grpcHandler "github.com/moroshma/MiniToolStream/MiniToolStreamIngress/internal/delivery/grpc"
 	minioRepo "github.com/moroshma/MiniToolStream/MiniToolStreamIngress/internal/repository/minio"
 	tarantoolRepo "github.com/moroshma/MiniToolStream/MiniToolStreamIngress/internal/repository/tarantool"
+	"github.com/moroshma/MiniToolStream/MiniToolStreamIngress/internal/service/ttl"
 	"github.com/moroshma/MiniToolStream/MiniToolStreamIngress/internal/usecase"
 	"github.com/moroshma/MiniToolStream/MiniToolStreamIngress/pkg/logger"
 	pb "github.com/moroshma/MiniToolStreamConnector/model"
@@ -128,6 +129,24 @@ func main() {
 
 	// Initialize gRPC handler
 	ingressHandler := grpcHandler.NewIngressHandler(publishUC, appLogger)
+
+	// Initialize TTL cleanup service
+	ttlService := ttl.NewService(
+		messageRepo,
+		storageRepo,
+		ttl.Config{
+			Enabled:     cfg.TTL.Enabled,
+			TTLDuration: cfg.TTL.Duration,
+			Interval:    cfg.TTL.Interval,
+		},
+		appLogger,
+	)
+
+	// Start TTL cleanup service
+	if err := ttlService.Start(ctx); err != nil {
+		appLogger.Fatal("Failed to start TTL service", logger.Error(err))
+	}
+	defer ttlService.Stop()
 
 	// Create gRPC server
 	grpcServer := grpc.NewServer()

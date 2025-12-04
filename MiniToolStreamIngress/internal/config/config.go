@@ -16,6 +16,7 @@ type Config struct {
 	MinIO     MinIOConfig     `yaml:"minio"`
 	Vault     VaultConfig     `yaml:"vault"`
 	Logger    LoggerConfig    `yaml:"logger"`
+	TTL       TTLConfig       `yaml:"ttl"`
 }
 
 // ServerConfig represents gRPC server configuration
@@ -44,6 +45,13 @@ type MinIOConfig struct {
 
 	// Vault path for credentials (optional)
 	VaultPath string `yaml:"vault_path" envconfig:"MINIO_VAULT_PATH"`
+}
+
+// TTLConfig represents Time-To-Live configuration for automatic cleanup
+type TTLConfig struct {
+	Enabled  bool          `yaml:"enabled" envconfig:"TTL_ENABLED" default:"false"`
+	Duration time.Duration `yaml:"duration" envconfig:"TTL_DURATION" default:"24h"`
+	Interval time.Duration `yaml:"interval" envconfig:"TTL_INTERVAL" default:"1h"`
 }
 
 // VaultConfig represents HashiCorp Vault configuration
