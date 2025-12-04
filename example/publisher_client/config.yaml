@@ -1,0 +1,13 @@
+client:
+  server_address: localhost:50051
+  timeout: 10s
+  default_subject: test.channel
+  default_content_type: image/jpeg
+  batch_size: 10
+
+vault:
+  enabled: false
+
+logger:
+  level: info
+  format: console

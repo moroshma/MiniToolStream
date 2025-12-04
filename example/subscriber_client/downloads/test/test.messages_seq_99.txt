@@ -1,0 +1,1 @@
+Second test message - full chain works!

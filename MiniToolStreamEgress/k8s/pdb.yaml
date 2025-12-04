@@ -1,0 +1,14 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: minitoolstream-egress-pdb
+  namespace: minitoolstream
+  labels:
+    app: minitoolstream-egress
+    component: availability
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: minitoolstream-egress
+  unhealthyPodEvictionPolicy: AlwaysAllow

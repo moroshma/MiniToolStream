@@ -1,0 +1,35 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: minitoolstream
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - secret.yaml
+  - rbac.yaml
+  - deployment.yaml
+  - service.yaml
+  - hpa.yaml
+  - pdb.yaml
+
+labels:
+  - pairs:
+      app.kubernetes.io/name: minitoolstream-ingress
+      app.kubernetes.io/instance: production
+      app.kubernetes.io/version: "1.0.0"
+      app.kubernetes.io/component: ingress
+      app.kubernetes.io/part-of: minitoolstream
+      app.kubernetes.io/managed-by: kubectl
+
+images:
+  - name: minitoolstream-ingress
+    newName: minitoolstream-ingress
+    newTag: latest
+
+configMapGenerator:
+  - name: minitoolstream-ingress-version
+    literals:
+      - VERSION=1.0.0
+      - BUILD_DATE=2025-01-01
+      - GIT_COMMIT=unknown
