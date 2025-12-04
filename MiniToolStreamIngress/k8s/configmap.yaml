@@ -37,5 +37,11 @@ data:
 
     ttl:
       enabled: true
-      duration: 24h   # Delete messages older than 24 hours
-      interval: 1h    # Run cleanup every hour
+      default: 24h    # Default TTL for all channels
+      channels:       # Per-channel TTL overrides
+        - channel: "logs"
+          duration: 7d    # Logs: 7 days
+        - channel: "metrics"
+          duration: 30d   # Metrics: 30 days
+        - channel: "events"
+          duration: 90d   # Events: 90 days

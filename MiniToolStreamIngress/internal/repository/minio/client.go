@@ -9,7 +9,9 @@ import (
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
+	"github.com/minio/minio-go/v7/pkg/lifecycle"
 
+	"github.com/moroshma/MiniToolStream/MiniToolStreamIngress/internal/config"
 	"github.com/moroshma/MiniToolStream/MiniToolStreamIngress/pkg/logger"
 )
 
@@ -191,6 +193,89 @@ func (r *Repository) DeleteObject(ctx context.Context, objectName string) error 
 	r.logger.Debug("Object deleted successfully",
 		logger.String("bucket", bucketName),
 		logger.String("object", objectName),
+	)
+
+	return nil
+}
+
+// SetupTTLPolicies configures MinIO lifecycle policies for automatic expiration
+func (r *Repository) SetupTTLPolicies(ctx context.Context, ttlConfig config.TTLConfig) error {
+	bucketName := r.config.BucketName
+
+	r.logger.Info("Setting up MinIO lifecycle policies",
+		logger.String("bucket", bucketName),
+		logger.Any("default_ttl", ttlConfig.Default),
+	)
+
+	// Create lifecycle configuration
+	config := lifecycle.NewConfiguration()
+	var rules []lifecycle.Rule
+
+	// Add default rule for all objects
+	if ttlConfig.Default > 0 {
+		defaultRule := lifecycle.Rule{
+			ID:     "default-ttl",
+			Status: "Enabled",
+			Expiration: lifecycle.Expiration{
+				Days: lifecycle.ExpirationDays(int(ttlConfig.Default.Hours() / 24)),
+			},
+		}
+		rules = append(rules, defaultRule)
+		r.logger.Info("Added default TTL rule",
+			logger.String("rule_id", "default-ttl"),
+			logger.Int("days", int(ttlConfig.Default.Hours()/24)),
+		)
+	}
+
+	// Add per-channel rules
+	for _, channelTTL := range ttlConfig.Channels {
+		if channelTTL.Duration <= 0 {
+			continue
+		}
+
+		// Objects are named as "{channel}_{sequence}"
+		// Use prefix filter to match channel
+		channelRule := lifecycle.Rule{
+			ID:     fmt.Sprintf("channel-%s-ttl", channelTTL.Channel),
+			Status: "Enabled",
+			Expiration: lifecycle.Expiration{
+				Days: lifecycle.ExpirationDays(int(channelTTL.Duration.Hours() / 24)),
+			},
+			RuleFilter: lifecycle.Filter{
+				And: lifecycle.And{
+					Prefix: channelTTL.Channel + "_",
+				},
+			},
+		}
+		rules = append(rules, channelRule)
+		r.logger.Info("Added channel-specific TTL rule",
+			logger.String("rule_id", channelRule.ID),
+			logger.String("channel", channelTTL.Channel),
+			logger.String("prefix", channelTTL.Channel+"_"),
+			logger.Int("days", int(channelTTL.Duration.Hours()/24)),
+		)
+	}
+
+	if len(rules) == 0 {
+		r.logger.Warn("No TTL rules to apply")
+		return nil
+	}
+
+	config.Rules = rules
+
+	// Apply lifecycle configuration
+	err := r.client.SetBucketLifecycle(ctx, bucketName, config)
+	if err != nil {
+		r.logger.Error("Failed to set bucket lifecycle",
+			logger.String("bucket", bucketName),
+			logger.Error(err),
+		)
+		return fmt.Errorf("failed to set bucket lifecycle: %w", err)
+	}
+
+	r.logger.Info("Successfully configured MinIO lifecycle policies",
+		logger.String("bucket", bucketName),
+		logger.Int("rules_count", len(rules)),
 	)
 
 	return nil
