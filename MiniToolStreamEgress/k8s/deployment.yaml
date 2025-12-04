@@ -1,0 +1,213 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minitoolstream-egress
+  namespace: minitoolstream
+  labels:
+    app: minitoolstream-egress
+    component: service
+    version: v1.0.0
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: minitoolstream-egress
+  template:
+    metadata:
+      labels:
+        app: minitoolstream-egress
+        component: service
+        version: v1.0.0
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "50052"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: minitoolstream-egress
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+
+      # Init container to wait for dependencies
+      initContainers:
+        - name: wait-for-tarantool
+          image: busybox:latest
+          command:
+            - sh
+            - -c
+            - |
+              until nc -z tarantool-service.minitoolstream.svc.cluster.local 3301; do
+                echo "Waiting for Tarantool..."
+                sleep 2
+              done
+              echo "Tarantool is ready!"
+
+        - name: wait-for-minio
+          image: busybox:latest
+          command:
+            - sh
+            - -c
+            - |
+              until nc -z minio-service.minitoolstream.svc.cluster.local 9000; do
+                echo "Waiting for MinIO..."
+                sleep 2
+              done
+              echo "MinIO is ready!"
+
+      containers:
+        - name: egress
+          image: minitoolstream-egress:latest
+          imagePullPolicy: IfNotPresent
+
+          ports:
+            - name: grpc
+              containerPort: 50052
+              protocol: TCP
+
+          env:
+            # Server configuration
+            - name: SERVER_PORT
+              value: "50052"
+            - name: SERVER_POLL_INTERVAL
+              value: "1s"
+
+            # Tarantool configuration
+            - name: TARANTOOL_ADDRESS
+              value: "tarantool-service.minitoolstream.svc.cluster.local:3301"
+            - name: TARANTOOL_USER
+              value: "minitoolstream_connector"
+            - name: TARANTOOL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: minitoolstream-egress-secret
+                  key: TARANTOOL_PASSWORD
+            - name: TARANTOOL_TIMEOUT
+              value: "5s"
+
+            # MinIO configuration
+            - name: MINIO_ENDPOINT
+              value: "minio-service.minitoolstream.svc.cluster.local:9000"
+            - name: MINIO_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: minitoolstream-egress-secret
+                  key: MINIO_ACCESS_KEY_ID
+            - name: MINIO_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: minitoolstream-egress-secret
+                  key: MINIO_SECRET_ACCESS_KEY
+            - name: MINIO_USE_SSL
+              value: "false"
+            - name: MINIO_BUCKET_NAME
+              value: "minitoolstream"
+
+            # Vault configuration (optional)
+            - name: VAULT_ENABLED
+              value: "false"
+            - name: VAULT_ADDR
+              value: "http://vault.minitoolstream.svc.cluster.local:8200"
+
+            # Logger configuration
+            - name: LOG_LEVEL
+              value: "info"
+            - name: LOG_FORMAT
+              value: "json"
+            - name: LOG_OUTPUT_PATH
+              value: "stdout"
+
+            # Pod information
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+
+          volumeMounts:
+            - name: config
+              mountPath: /etc/minitoolstream
+              readOnly: true
+
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - "nc -z localhost 50052"
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            successThreshold: 1
+            failureThreshold: 3
+
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - "nc -z localhost 50052"
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            successThreshold: 1
+            failureThreshold: 3
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1000
+            capabilities:
+              drop:
+                - ALL
+
+      volumes:
+        - name: config
+          configMap:
+            name: minitoolstream-egress-config
+
+      # Affinity rules for better distribution
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - minitoolstream-egress
+                topologyKey: kubernetes.io/hostname
+
+      # Toleration for node taints
+      tolerations:
+        - key: "node.kubernetes.io/not-ready"
+          operator: "Exists"
+          effect: "NoExecute"
+          tolerationSeconds: 300
+        - key: "node.kubernetes.io/unreachable"
+          operator: "Exists"
+          effect: "NoExecute"
+          tolerationSeconds: 300

@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: minitoolstream-egress-config
+  namespace: minitoolstream
+  labels:
+    app: minitoolstream-egress
+    component: config
+data:
+  config.yaml: |
+    server:
+      port: 50052
+      poll_interval: 1s
+
+    tarantool:
+      address: "tarantool-service.minitoolstream.svc.cluster.local:3301"
+      user: "minitoolstream_connector"
+      timeout: 5s
+      # Password will be loaded from secret via env vars
+      vault_path: "secret/data/minitoolstream/tarantool"
+
+    minio:
+      endpoint: "minio-service.minitoolstream.svc.cluster.local:9000"
+      use_ssl: false
+      bucket_name: "minitoolstream"
+      # Credentials will be loaded from secret via env vars
+      vault_path: "secret/data/minitoolstream/minio"
+
+    vault:
+      enabled: false
+      address: "http://vault.minitoolstream.svc.cluster.local:8200"
+      namespace: ""
+
+    logger:
+      level: "info"
+      format: "json"
+      output_path: "stdout"
