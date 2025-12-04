@@ -34,3 +34,8 @@ data:
       level: "info"
       format: "json"
       output_path: "stdout"
+
+    ttl:
+      enabled: true
+      duration: 24h   # Delete messages older than 24 hours
+      interval: 1h    # Run cleanup every hour

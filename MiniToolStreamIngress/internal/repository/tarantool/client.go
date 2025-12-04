@@ -8,6 +8,7 @@ import (
 
 	"github.com/tarantool/go-tarantool/v2"
 
+	"github.com/moroshma/MiniToolStream/MiniToolStreamIngress/internal/service/ttl"
 	"github.com/moroshma/MiniToolStream/MiniToolStreamIngress/pkg/logger"
 )
 
@@ -155,6 +156,52 @@ func (r *Repository) PublishMessage(subject string, headers map[string]string) (
 	return sequence, nil
 }
 
+// DeleteOldMessages deletes messages older than TTL
+// Returns count of deleted messages and their info
+func (r *Repository) DeleteOldMessages(ttlSeconds int) (int, []ttl.MessageInfo, error) {
+	r.logger.Debug("Deleting old messages from Tarantool",
+		logger.Int("ttl_seconds", ttlSeconds),
+	)
+
+	// Call Tarantool function
+	resp, err := r.call("delete_old_messages", []interface{}{ttlSeconds})
+	if err != nil {
+		r.logger.Error("Failed to delete old messages from Tarantool",
+			logger.Int("ttl_seconds", ttlSeconds),
+			logger.Error(err),
+		)
+		return 0, nil, fmt.Errorf("failed to delete old messages: %w", err)
+	}
+
+	if len(resp) < 2 {
+		return 0, nil, fmt.Errorf("unexpected response format from Tarantool")
+	}
+
+	// Parse deleted count
+	deletedCount := int(toUint64(resp[0]))
+
+	// Parse deleted messages info
+	var deletedMessages []ttl.MessageInfo
+	if messagesArray, ok := resp[1].([]interface{}); ok {
+		for _, msg := range messagesArray {
+			if msgMap, ok := msg.([]interface{}); ok && len(msgMap) >= 3 {
+				info := ttl.MessageInfo{
+					Sequence:   toUint64(msgMap[0]),
+					Subject:    toString(msgMap[1]),
+					ObjectName: toString(msgMap[2]),
+				}
+				deletedMessages = append(deletedMessages, info)
+			}
+		}
+	}
+
+	r.logger.Debug("Old messages deleted successfully",
+		logger.Int("count", deletedCount),
+	)
+
+	return deletedCount, deletedMessages, nil
+}
+
 // Helper function for type conversion
 func toUint64(val interface{}) uint64 {
 	switch v := val.(type) {
@@ -184,5 +231,17 @@ func toUint64(val interface{}) uint64 {
 		return uint64(v)
 	default:
 		return 0
+	}
+}
+
+// Helper function for string conversion
+func toString(val interface{}) string {
+	switch v := val.(type) {
+	case string:
+		return v
+	case []byte:
+		return string(v)
+	default:
+		return fmt.Sprintf("%v", v)
 	}
 }

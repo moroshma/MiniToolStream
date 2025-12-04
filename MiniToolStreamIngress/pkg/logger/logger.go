@@ -103,3 +103,7 @@ func Error(err error) zap.Field {
 func Any(key string, val interface{}) zap.Field {
 	return zap.Any(key, val)
 }
+
+func Duration(key string, val interface{}) zap.Field {
+	return zap.Any(key, val)
+}

@@ -167,3 +167,31 @@ func (r *Repository) GetObjectURL(objectName string) string {
 	}
 	return fmt.Sprintf("%s://%s/%s/%s", protocol, r.config.Endpoint, bucketName, objectName)
 }
+
+// DeleteObject deletes an object from MinIO
+func (r *Repository) DeleteObject(ctx context.Context, objectName string) error {
+	bucketName := r.config.BucketName
+
+	r.logger.Debug("Deleting object from MinIO",
+		logger.String("bucket", bucketName),
+		logger.String("object", objectName),
+	)
+
+	// Delete object
+	err := r.client.RemoveObject(ctx, bucketName, objectName, minio.RemoveObjectOptions{})
+	if err != nil {
+		r.logger.Error("Failed to delete object from MinIO",
+			logger.String("bucket", bucketName),
+			logger.String("object", objectName),
+			logger.Error(err),
+		)
+		return fmt.Errorf("failed to delete object: %w", err)
+	}
+
+	r.logger.Debug("Object deleted successfully",
+		logger.String("bucket", bucketName),
+		logger.String("object", objectName),
+	)
+
+	return nil
+}

@@ -1,0 +1,29 @@
+server:
+  port: 50051
+
+tarantool:
+  address: "tarantool:3301"
+  user: "minitoolstream_connector"
+  password: "changeme"
+  timeout: 10s
+
+minio:
+  endpoint: "minio:9000"
+  access_key_id: "minioadmin"
+  secret_access_key: "minioadmin"
+  use_ssl: false
+  bucket_name: "minitoolstream"
+
+vault:
+  enabled: false
+  address: "http://vault:8200"
+
+logger:
+  level: "info"
+  format: "json"
+  output_path: "stdout"
+
+ttl:
+  enabled: true
+  duration: 2m  # Delete messages older than 2 minutes (for testing)
+  interval: 30s  # Run cleanup every 30 seconds
