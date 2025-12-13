@@ -5,11 +5,14 @@ import (
 	"fmt"
 
 	pb "github.com/moroshma/MiniToolStreamConnector/model"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/moroshma/MiniToolStream/MiniToolStreamEgress/internal/domain/entity"
 	"github.com/moroshma/MiniToolStream/MiniToolStreamEgress/internal/usecase"
 	"github.com/moroshma/MiniToolStream/MiniToolStreamEgress/pkg/logger"
+	"github.com/moroshma/MiniToolStreamConnector/auth"
 )
 
 // EgressHandler implements the gRPC EgressService
@@ -29,10 +32,29 @@ func NewEgressHandler(messageUC *usecase.MessageUseCase, logger *logger.Logger) 
 
 // Subscribe implements the Subscribe RPC method
 func (h *EgressHandler) Subscribe(req *pb.SubscribeRequest, stream pb.EgressService_SubscribeServer) error {
-	h.logger.Info("Subscribe request",
-		logger.String("subject", req.Subject),
-		logger.String("durable_name", req.DurableName),
-	)
+	// Check authorization if claims are present in context
+	if claims, ok := auth.GetClaimsFromContext(stream.Context()); ok {
+		h.logger.Info("Authenticated Subscribe request",
+			logger.String("subject", req.Subject),
+			logger.String("client_id", claims.ClientID),
+			logger.String("durable_name", req.DurableName),
+		)
+
+		// Validate subscribe permission
+		if err := claims.ValidateSubscribeAccess(req.Subject); err != nil {
+			h.logger.Warn("Subscribe permission denied",
+				logger.String("subject", req.Subject),
+				logger.String("client_id", claims.ClientID),
+				logger.Error(err),
+			)
+			return status.Errorf(codes.PermissionDenied, "subscribe permission denied")
+		}
+	} else {
+		h.logger.Info("Unauthenticated Subscribe request",
+			logger.String("subject", req.Subject),
+			logger.String("durable_name", req.DurableName),
+		)
+	}
 
 	if req.Subject == "" {
 		return fmt.Errorf("subject cannot be empty")
@@ -89,11 +111,31 @@ func (h *EgressHandler) Subscribe(req *pb.SubscribeRequest, stream pb.EgressServ
 
 // Fetch implements the Fetch RPC method
 func (h *EgressHandler) Fetch(req *pb.FetchRequest, stream pb.EgressService_FetchServer) error {
-	h.logger.Info("Fetch request",
-		logger.String("subject", req.Subject),
-		logger.String("durable_name", req.DurableName),
-		logger.Int("batch_size", int(req.BatchSize)),
-	)
+	// Check authorization if claims are present in context
+	if claims, ok := auth.GetClaimsFromContext(stream.Context()); ok {
+		h.logger.Info("Authenticated Fetch request",
+			logger.String("subject", req.Subject),
+			logger.String("client_id", claims.ClientID),
+			logger.String("durable_name", req.DurableName),
+			logger.Int("batch_size", int(req.BatchSize)),
+		)
+
+		// Validate fetch permission
+		if err := claims.ValidateFetchAccess(req.Subject); err != nil {
+			h.logger.Warn("Fetch permission denied",
+				logger.String("subject", req.Subject),
+				logger.String("client_id", claims.ClientID),
+				logger.Error(err),
+			)
+			return status.Errorf(codes.PermissionDenied, "fetch permission denied")
+		}
+	} else {
+		h.logger.Info("Unauthenticated Fetch request",
+			logger.String("subject", req.Subject),
+			logger.String("durable_name", req.DurableName),
+			logger.Int("batch_size", int(req.BatchSize)),
+		)
+	}
 
 	if req.Subject == "" {
 		return fmt.Errorf("subject cannot be empty")

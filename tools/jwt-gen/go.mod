@@ -1,17 +1,16 @@
-module github.com/moroshma/MiniToolStream/example/publisher_client
+module github.com/moroshma/MiniToolStream/tools/jwt-gen
 
 go 1.24.0
 
 require (
 	github.com/hashicorp/vault/api v1.22.0
-	github.com/kelseyhightower/envconfig v1.4.0
-	github.com/moroshma/MiniToolStreamConnector/minitoolstream_connector v0.1.3
-	gopkg.in/yaml.v3 v3.0.1
+	github.com/moroshma/MiniToolStreamConnector/auth v0.1.0
 )
 
 require (
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/go-jose/go-jose/v4 v4.1.3 // indirect
+	github.com/golang-jwt/jwt/v5 v5.2.1 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
@@ -23,7 +22,6 @@ require (
 	github.com/hashicorp/hcl v1.0.1-vault-7 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
-	github.com/moroshma/MiniToolStreamConnector/model v0.1.3 // indirect
 	github.com/ryanuber/go-glob v1.0.0 // indirect
 	golang.org/x/net v0.46.1-0.20251013234738-63d1a5100f82 // indirect
 	golang.org/x/sys v0.37.0 // indirect

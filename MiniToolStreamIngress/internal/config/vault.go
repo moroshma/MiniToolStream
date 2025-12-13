@@ -63,6 +63,14 @@ func (vc *VaultClient) GetSecret(ctx context.Context, path string) (map[string]i
 	return secret.Data, nil
 }
 
+// Client returns the underlying Vault client
+func (vc *VaultClient) Client() *vault.Client {
+	if vc == nil {
+		return nil
+	}
+	return vc.client
+}
+
 // ApplyVaultSecrets applies secrets from Vault to configuration
 func ApplyVaultSecrets(ctx context.Context, cfg *Config, vaultClient *VaultClient) error {
 	if vaultClient == nil {

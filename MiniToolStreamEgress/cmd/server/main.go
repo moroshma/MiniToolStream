@@ -8,9 +8,12 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
+	vault "github.com/hashicorp/vault/api"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/reflection"
 
 	"github.com/moroshma/MiniToolStream/MiniToolStreamEgress/internal/config"
@@ -19,6 +22,7 @@ import (
 	tarantoolRepo "github.com/moroshma/MiniToolStream/MiniToolStreamEgress/internal/repository/tarantool"
 	"github.com/moroshma/MiniToolStream/MiniToolStreamEgress/internal/usecase"
 	"github.com/moroshma/MiniToolStream/MiniToolStreamEgress/pkg/logger"
+	"github.com/moroshma/MiniToolStreamConnector/auth"
 	pb "github.com/moroshma/MiniToolStreamConnector/model"
 )
 
@@ -125,8 +129,29 @@ func main() {
 	// Initialize gRPC handler
 	egressHandler := grpcHandler.NewEgressHandler(messageUC, appLogger)
 
-	// Create gRPC server
-	grpcServer := grpc.NewServer()
+	// Initialize JWT authentication if enabled
+	var grpcServer *grpc.Server
+	if cfg.Auth.Enabled {
+		appLogger.Info("JWT authentication enabled",
+			logger.String("issuer", cfg.Auth.JWTIssuer),
+			logger.String("vault_path", cfg.Auth.JWTVaultPath),
+		)
+
+		jwtManager, err := initJWTManager(ctx, vaultClient.Client(), &cfg.Auth, appLogger)
+		if err != nil {
+			appLogger.Fatal("Failed to initialize JWT manager", logger.Error(err))
+		}
+
+		// Create gRPC server with JWT interceptors (stream interceptor for Subscribe/Fetch)
+		grpcServer = grpc.NewServer(
+			grpc.StreamInterceptor(conditionalStreamAuthInterceptor(jwtManager, cfg.Auth.RequireAuth)),
+		)
+		appLogger.Info("✓ JWT authentication configured")
+	} else {
+		appLogger.Info("JWT authentication disabled")
+		grpcServer = grpc.NewServer()
+	}
+
 	pb.RegisterEgressServiceServer(grpcServer, egressHandler)
 
 	// Register reflection for grpcurl
@@ -155,4 +180,77 @@ func main() {
 	if err := grpcServer.Serve(listener); err != nil {
 		appLogger.Fatal("Failed to serve", logger.Error(err))
 	}
+}
+
+// initJWTManager initializes JWT manager from Vault
+func initJWTManager(ctx context.Context, vaultClient *vault.Client, cfg *config.AuthConfig, log *logger.Logger) (*auth.JWTManager, error) {
+	if vaultClient == nil {
+		return nil, fmt.Errorf("vault client is required for JWT authentication")
+	}
+
+	log.Info("Loading JWT keys from Vault", logger.String("path", cfg.JWTVaultPath))
+	jwtManager, err := auth.NewJWTManagerFromVault(ctx, vaultClient, cfg.JWTVaultPath, cfg.JWTIssuer)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create JWT manager: %w", err)
+	}
+
+	return jwtManager, nil
+}
+
+// conditionalStreamAuthInterceptor creates a stream interceptor that conditionally requires authentication
+func conditionalStreamAuthInterceptor(jwtManager *auth.JWTManager, requireAuth bool) grpc.StreamServerInterceptor {
+	if requireAuth {
+		// Require authentication for all requests
+		return auth.StreamServerInterceptor(jwtManager)
+	}
+
+	// Optional authentication - validate if present, allow if not
+	return func(
+		srv interface{},
+		stream grpc.ServerStream,
+		info *grpc.StreamServerInfo,
+		handler grpc.StreamHandler,
+	) error {
+		// Try to get token from metadata
+		claims, _ := tryAuthenticate(stream.Context(), jwtManager)
+		if claims != nil {
+			wrappedStream := &authenticatedStream{
+				ServerStream: stream,
+				ctx:          context.WithValue(stream.Context(), auth.ClaimsContextKey{}, claims),
+			}
+			return handler(srv, wrappedStream)
+		}
+		return handler(srv, stream)
+	}
+}
+
+// authenticatedStream wraps grpc.ServerStream with authenticated context
+type authenticatedStream struct {
+	grpc.ServerStream
+	ctx context.Context
+}
+
+func (s *authenticatedStream) Context() context.Context {
+	return s.ctx
+}
+
+// tryAuthenticate attempts to authenticate but doesn't fail if no token present
+func tryAuthenticate(ctx context.Context, jwtManager *auth.JWTManager) (*auth.Claims, error) {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return nil, nil
+	}
+
+	values := md.Get("authorization")
+	if len(values) == 0 {
+		return nil, nil
+	}
+
+	token := values[0]
+	if !strings.HasPrefix(token, "Bearer ") {
+		return nil, nil
+	}
+
+	token = strings.TrimPrefix(token, "Bearer ")
+	return jwtManager.ValidateToken(token)
 }

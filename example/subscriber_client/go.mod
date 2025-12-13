@@ -2,10 +2,10 @@ module github.com/moroshma/MiniToolStream/example/subscriber_client
 
 go 1.24.0
 
-require github.com/moroshma/MiniToolStreamConnector/minitoolstream_connector v0.1.1
+require github.com/moroshma/MiniToolStreamConnector/minitoolstream_connector v0.1.3
 
 require (
-	github.com/moroshma/MiniToolStreamConnector/model v0.1.1 // indirect
+	github.com/moroshma/MiniToolStreamConnector/model v0.1.3 // indirect
 	golang.org/x/net v0.47.0 // indirect
 	golang.org/x/sys v0.38.0 // indirect
 	golang.org/x/text v0.31.0 // indirect

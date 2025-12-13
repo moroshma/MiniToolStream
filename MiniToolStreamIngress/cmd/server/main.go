@@ -8,9 +8,12 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
+	vault "github.com/hashicorp/vault/api"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/reflection"
 
 	"github.com/moroshma/MiniToolStream/MiniToolStreamIngress/internal/config"
@@ -19,6 +22,7 @@ import (
 	tarantoolRepo "github.com/moroshma/MiniToolStream/MiniToolStreamIngress/internal/repository/tarantool"
 	"github.com/moroshma/MiniToolStream/MiniToolStreamIngress/internal/usecase"
 	"github.com/moroshma/MiniToolStream/MiniToolStreamIngress/pkg/logger"
+	"github.com/moroshma/MiniToolStreamConnector/auth"
 	pb "github.com/moroshma/MiniToolStreamConnector/model"
 )
 
@@ -149,8 +153,39 @@ func main() {
 		}
 	}
 
-	// Create gRPC server
-	grpcServer := grpc.NewServer()
+	// Initialize JWT authentication if enabled
+	var grpcServer *grpc.Server
+	// Set max message size to 256MB (for large file transfers)
+	maxMsgSize := 256 * 1024 * 1024 // 256MB
+
+	if cfg.Auth.Enabled {
+		appLogger.Info("JWT authentication enabled",
+			logger.String("issuer", cfg.Auth.JWTIssuer),
+			logger.String("vault_path", cfg.Auth.JWTVaultPath),
+		)
+
+		// Import auth package
+		jwtManager, err := initJWTManager(ctx, vaultClient.Client(), &cfg.Auth, appLogger)
+		if err != nil {
+			appLogger.Fatal("Failed to initialize JWT manager", logger.Error(err))
+		}
+
+		// Create gRPC server with JWT interceptors and increased message size limits
+		grpcServer = grpc.NewServer(
+			grpc.UnaryInterceptor(conditionalAuthInterceptor(jwtManager, cfg.Auth.RequireAuth)),
+			grpc.MaxRecvMsgSize(maxMsgSize),
+			grpc.MaxSendMsgSize(maxMsgSize),
+		)
+		appLogger.Info("✓ JWT authentication configured")
+	} else {
+		appLogger.Info("JWT authentication disabled")
+		grpcServer = grpc.NewServer(
+			grpc.MaxRecvMsgSize(maxMsgSize),
+			grpc.MaxSendMsgSize(maxMsgSize),
+		)
+	}
+	appLogger.Info("gRPC max message size configured", logger.Int("max_mb", maxMsgSize/(1024*1024)))
+
 	pb.RegisterIngressServiceServer(grpcServer, ingressHandler)
 
 	// Register reflection for grpcurl
@@ -179,4 +214,63 @@ func main() {
 	if err := grpcServer.Serve(listener); err != nil {
 		appLogger.Fatal("Failed to serve", logger.Error(err))
 	}
+}
+
+// initJWTManager initializes JWT manager from Vault
+func initJWTManager(ctx context.Context, vaultClient *vault.Client, cfg *config.AuthConfig, log *logger.Logger) (*auth.JWTManager, error) {
+	if vaultClient == nil {
+		return nil, fmt.Errorf("vault client is required for JWT authentication")
+	}
+
+	log.Info("Loading JWT keys from Vault", logger.String("path", cfg.JWTVaultPath))
+	jwtManager, err := auth.NewJWTManagerFromVault(ctx, vaultClient, cfg.JWTVaultPath, cfg.JWTIssuer)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create JWT manager: %w", err)
+	}
+
+	return jwtManager, nil
+}
+
+// conditionalAuthInterceptor creates an interceptor that conditionally requires authentication
+func conditionalAuthInterceptor(jwtManager *auth.JWTManager, requireAuth bool) grpc.UnaryServerInterceptor {
+	if requireAuth {
+		// Require authentication for all requests
+		return auth.UnaryServerInterceptor(jwtManager)
+	}
+
+	// Optional authentication - validate if present, allow if not
+	return func(
+		ctx context.Context,
+		req interface{},
+		info *grpc.UnaryServerInfo,
+		handler grpc.UnaryHandler,
+	) (interface{}, error) {
+		// Try to get token from metadata
+		claims, _ := tryAuthenticate(ctx, jwtManager)
+		if claims != nil {
+			ctx = context.WithValue(ctx, auth.ClaimsContextKey{}, claims)
+		}
+		return handler(ctx, req)
+	}
+}
+
+// tryAuthenticate attempts to authenticate but doesn't fail if no token present
+func tryAuthenticate(ctx context.Context, jwtManager *auth.JWTManager) (*auth.Claims, error) {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return nil, nil
+	}
+
+	values := md.Get("authorization")
+	if len(values) == 0 {
+		return nil, nil
+	}
+
+	token := values[0]
+	if !strings.HasPrefix(token, "Bearer ") {
+		return nil, nil
+	}
+
+	token = strings.TrimPrefix(token, "Bearer ")
+	return jwtManager.ValidateToken(token)
 }

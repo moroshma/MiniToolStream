@@ -6,7 +6,8 @@ require (
 	github.com/hashicorp/vault/api v1.22.0
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/minio/minio-go/v7 v7.0.97
-	github.com/moroshma/MiniToolStreamConnector/model v0.1.1
+	github.com/moroshma/MiniToolStreamConnector/auth v0.1.0
+	github.com/moroshma/MiniToolStreamConnector/model v0.1.3
 	github.com/stretchr/testify v1.10.0
 	github.com/tarantool/go-tarantool/v2 v2.4.1
 	go.uber.org/zap v1.27.1
@@ -20,6 +21,7 @@ require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/go-ini/ini v1.67.0 // indirect
 	github.com/go-jose/go-jose/v4 v4.1.3 // indirect
+	github.com/golang-jwt/jwt/v5 v5.2.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
