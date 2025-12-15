@@ -16,6 +16,7 @@ type Config struct {
 	MinIO     MinIOConfig     `yaml:"minio"`
 	Vault     VaultConfig     `yaml:"vault"`
 	Logger    LoggerConfig    `yaml:"logger"`
+	Auth      AuthConfig      `yaml:"auth"`
 }
 
 // ServerConfig represents gRPC server configuration
@@ -61,6 +62,14 @@ type LoggerConfig struct {
 	Level      string `yaml:"level" envconfig:"LOG_LEVEL" default:"info"`
 	Format     string `yaml:"format" envconfig:"LOG_FORMAT" default:"json"` // json or console
 	OutputPath string `yaml:"output_path" envconfig:"LOG_OUTPUT_PATH" default:"stdout"`
+}
+
+// AuthConfig represents authentication configuration
+type AuthConfig struct {
+	Enabled        bool   `yaml:"enabled" envconfig:"AUTH_ENABLED" default:"false"`
+	JWTVaultPath   string `yaml:"jwt_vault_path" envconfig:"JWT_VAULT_PATH" default:"secret/data/minitoolstream/jwt"`
+	JWTIssuer      string `yaml:"jwt_issuer" envconfig:"JWT_ISSUER" default:"minitoolstream"`
+	RequireAuth    bool   `yaml:"require_auth" envconfig:"REQUIRE_AUTH" default:"true"` // If false, allow unauthenticated requests
 }
 
 // Load loads configuration from file and environment variables

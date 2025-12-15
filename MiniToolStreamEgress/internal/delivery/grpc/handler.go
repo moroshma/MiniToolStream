@@ -197,3 +197,61 @@ func (h *EgressHandler) GetLastSequence(ctx context.Context, req *pb.GetLastSequ
 		LastSequence: lastSeq,
 	}, nil
 }
+
+// AckMessage implements the AckMessage RPC method for manual message acknowledgment
+func (h *EgressHandler) AckMessage(ctx context.Context, req *pb.AckRequest) (*pb.AckResponse, error) {
+	// Check authorization if claims are present in context
+	if claims, ok := auth.GetClaimsFromContext(ctx); ok {
+		h.logger.Debug("Authenticated AckMessage request",
+			logger.String("subject", req.Subject),
+			logger.String("durable_name", req.DurableName),
+			logger.Uint64("sequence", req.Sequence),
+			logger.String("client_id", claims.ClientID),
+		)
+	} else {
+		h.logger.Debug("Unauthenticated AckMessage request",
+			logger.String("subject", req.Subject),
+			logger.String("durable_name", req.DurableName),
+			logger.Uint64("sequence", req.Sequence),
+		)
+	}
+
+	if req.Subject == "" {
+		return &pb.AckResponse{
+			Success:      false,
+			ErrorMessage: "subject cannot be empty",
+		}, nil
+	}
+
+	if req.DurableName == "" {
+		return &pb.AckResponse{
+			Success:      false,
+			ErrorMessage: "durable_name cannot be empty",
+		}, nil
+	}
+
+	// Update consumer position
+	err := h.messageUC.AckMessage(ctx, req.DurableName, req.Subject, req.Sequence)
+	if err != nil {
+		h.logger.Warn("Failed to acknowledge message",
+			logger.String("durable_name", req.DurableName),
+			logger.String("subject", req.Subject),
+			logger.Uint64("sequence", req.Sequence),
+			logger.Error(err),
+		)
+		return &pb.AckResponse{
+			Success:      false,
+			ErrorMessage: err.Error(),
+		}, nil
+	}
+
+	h.logger.Info("Message acknowledged",
+		logger.String("durable_name", req.DurableName),
+		logger.String("subject", req.Subject),
+		logger.Uint64("sequence", req.Sequence),
+	)
+
+	return &pb.AckResponse{
+		Success: true,
+	}, nil
+}

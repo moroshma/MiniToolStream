@@ -144,28 +144,26 @@ func (uc *MessageUseCase) FetchMessages(
 	}
 
 	// Load data from storage for each message
+	// IMPORTANT: Position is NOT updated here - consumer must explicitly ACK
+	// This enables At-Least-Once delivery semantics
 	for _, msg := range messages {
 		if msg.ObjectName != "" {
 			data, err := uc.storageRepo.GetObject(ctx, msg.Subject, msg.ObjectName)
 			if err != nil {
-				uc.logger.Warn("Failed to get data from storage",
+				uc.logger.Error("Failed to get data from storage - stopping batch processing",
 					logger.String("object_name", msg.ObjectName),
+					logger.Uint64("sequence", msg.Sequence),
 					logger.Error(err),
 				)
-				msg.Data = nil
-			} else {
-				msg.Data = data
+				// Don't return messages - client hasn't processed anything yet
+				return nil, fmt.Errorf("failed to fetch payload for sequence %d: %w", msg.Sequence, err)
 			}
+			msg.Data = data
 		}
 
-		// Update consumer position
-		err = uc.messageRepo.UpdateConsumerPosition(ctx, durableName, subject, msg.Sequence)
-		if err != nil {
-			uc.logger.Warn("Failed to update consumer position",
-				logger.Uint64("sequence", msg.Sequence),
-				logger.Error(err),
-			)
-		}
+		// NOTE: Position is NOT updated automatically anymore!
+		// Consumer must call AckMessage after successful processing
+		// This prevents message loss when consumer crashes during processing
 	}
 
 	uc.logger.Info("Fetched messages",
@@ -189,4 +187,21 @@ func (uc *MessageUseCase) GetLastSequence(ctx context.Context, subject string) (
 	)
 
 	return latestSeq, nil
+}
+
+// AckMessage acknowledges a message by updating the consumer position
+// This enables At-Least-Once delivery semantics
+func (uc *MessageUseCase) AckMessage(ctx context.Context, durableName, subject string, sequence uint64) error {
+	err := uc.messageRepo.UpdateConsumerPosition(ctx, durableName, subject, sequence)
+	if err != nil {
+		return fmt.Errorf("failed to update consumer position: %w", err)
+	}
+
+	uc.logger.Debug("Message acknowledged",
+		logger.String("durable_name", durableName),
+		logger.String("subject", subject),
+		logger.Uint64("sequence", sequence),
+	)
+
+	return nil
 }

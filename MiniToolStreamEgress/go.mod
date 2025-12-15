@@ -7,7 +7,7 @@ require (
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/minio/minio-go/v7 v7.0.82
 	github.com/moroshma/MiniToolStreamConnector/auth v0.1.0
-	github.com/moroshma/MiniToolStreamConnector/model v0.1.3
+	github.com/moroshma/MiniToolStreamConnector/model v0.1.4
 	github.com/tarantool/go-tarantool/v2 v2.1.0
 	go.uber.org/zap v1.27.0
 	google.golang.org/grpc v1.77.0
