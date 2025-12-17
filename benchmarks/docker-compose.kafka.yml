@@ -1,0 +1,83 @@
+version: '3.8'
+
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    hostname: zookeeper
+    container_name: benchmark-zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - zookeeper-data:/var/lib/zookeeper/data
+      - zookeeper-logs:/var/lib/zookeeper/log
+    networks:
+      - benchmark-network
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    hostname: kafka
+    container_name: benchmark-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+      - "9093:9093"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      # Увеличиваем лимиты для больших сообщений
+      KAFKA_MESSAGE_MAX_BYTES: 104857600  # 100MB
+      KAFKA_REPLICA_FETCH_MAX_BYTES: 104857600
+      KAFKA_MAX_REQUEST_SIZE: 104857600
+      # Performance tuning
+      KAFKA_NUM_NETWORK_THREADS: 8
+      KAFKA_NUM_IO_THREADS: 8
+      KAFKA_SOCKET_SEND_BUFFER_BYTES: 102400
+      KAFKA_SOCKET_RECEIVE_BUFFER_BYTES: 102400
+      KAFKA_SOCKET_REQUEST_MAX_BYTES: 104857600
+      # Log settings
+      KAFKA_LOG_RETENTION_HOURS: 1
+      KAFKA_LOG_SEGMENT_BYTES: 1073741824
+      KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS: 300000
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    networks:
+      - benchmark-network
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+
+  # Kafka UI для мониторинга (опционально)
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: benchmark-kafka-ui
+    depends_on:
+      - kafka
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: benchmark
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+    networks:
+      - benchmark-network
+
+volumes:
+  zookeeper-data:
+  zookeeper-logs:
+  kafka-data:
+
+networks:
+  benchmark-network:
+    driver: bridge

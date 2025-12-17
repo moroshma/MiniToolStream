@@ -111,7 +111,76 @@ func (r *Repository) call(functionName string, args []interface{}) ([]interface{
 	return resp, nil
 }
 
-// PublishMessage publishes a message to Tarantool
+// GetNextSequence allocates a new sequence number
+func (r *Repository) GetNextSequence() (uint64, error) {
+	r.logger.Debug("Getting next sequence from Tarantool")
+
+	resp, err := r.call("get_next_sequence", []interface{}{})
+	if err != nil {
+		r.logger.Error("Failed to get next sequence from Tarantool",
+			logger.Error(err),
+		)
+		return 0, fmt.Errorf("failed to get next sequence: %w", err)
+	}
+
+	if len(resp) == 0 {
+		return 0, fmt.Errorf("empty response from Tarantool")
+	}
+
+	sequence := toUint64(resp[0])
+
+	r.logger.Debug("Got sequence from Tarantool",
+		logger.Uint64("sequence", sequence),
+	)
+
+	return sequence, nil
+}
+
+// InsertMessage inserts a message with pre-allocated sequence
+func (r *Repository) InsertMessage(sequence uint64, subject string, headers map[string]string, objectName string) error {
+	if subject == "" {
+		return fmt.Errorf("subject cannot be empty")
+	}
+
+	if headers == nil {
+		headers = make(map[string]string)
+	}
+
+	r.logger.Debug("Inserting message to Tarantool",
+		logger.Uint64("sequence", sequence),
+		logger.String("subject", subject),
+		logger.String("object_name", objectName),
+	)
+
+	// Call Tarantool function
+	resp, err := r.call("insert_message", []interface{}{
+		sequence,
+		subject,
+		headers,
+		objectName,
+	})
+	if err != nil {
+		r.logger.Error("Failed to insert message to Tarantool",
+			logger.String("subject", subject),
+			logger.Uint64("sequence", sequence),
+			logger.Error(err),
+		)
+		return fmt.Errorf("failed to insert message: %w", err)
+	}
+
+	if len(resp) == 0 {
+		return fmt.Errorf("empty response from Tarantool")
+	}
+
+	r.logger.Debug("Message inserted successfully",
+		logger.String("subject", subject),
+		logger.Uint64("sequence", sequence),
+	)
+
+	return nil
+}
+
+// PublishMessage publishes a message to Tarantool (legacy method)
 // Returns sequence number
 func (r *Repository) PublishMessage(subject string, headers map[string]string) (uint64, error) {
 	if subject == "" {

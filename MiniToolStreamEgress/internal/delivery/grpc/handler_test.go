@@ -7,6 +7,7 @@ import (
 	"time"
 
 	pb "github.com/moroshma/MiniToolStreamConnector/model"
+	"google.golang.org/grpc/metadata"
 
 	"github.com/moroshma/MiniToolStream/MiniToolStreamEgress/internal/domain/entity"
 	"github.com/moroshma/MiniToolStream/MiniToolStreamEgress/internal/usecase"
@@ -93,9 +94,9 @@ func (m *mockSubscribeStream) Context() context.Context {
 	return m.ctx
 }
 
-func (m *mockSubscribeStream) SetHeader(md interface{}) error  { return nil }
-func (m *mockSubscribeStream) SendHeader(md interface{}) error { return nil }
-func (m *mockSubscribeStream) SetTrailer(md interface{})       {}
+func (m *mockSubscribeStream) SetHeader(md metadata.MD) error  { return nil }
+func (m *mockSubscribeStream) SendHeader(md metadata.MD) error { return nil }
+func (m *mockSubscribeStream) SetTrailer(md metadata.MD)       {}
 func (m *mockSubscribeStream) SendMsg(msg interface{}) error   { return nil }
 func (m *mockSubscribeStream) RecvMsg(msg interface{}) error   { return nil }
 
@@ -117,9 +118,9 @@ func (m *mockFetchStream) Context() context.Context {
 	return m.ctx
 }
 
-func (m *mockFetchStream) SetHeader(md interface{}) error  { return nil }
-func (m *mockFetchStream) SendHeader(md interface{}) error { return nil }
-func (m *mockFetchStream) SetTrailer(md interface{})       {}
+func (m *mockFetchStream) SetHeader(md metadata.MD) error  { return nil }
+func (m *mockFetchStream) SendHeader(md metadata.MD) error { return nil }
+func (m *mockFetchStream) SetTrailer(md metadata.MD)       {}
 func (m *mockFetchStream) SendMsg(msg interface{}) error   { return nil }
 func (m *mockFetchStream) RecvMsg(msg interface{}) error   { return nil }
 

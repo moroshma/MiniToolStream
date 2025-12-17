@@ -1,0 +1,32 @@
+server:
+  port: 50052
+  poll_interval: 1s
+
+tarantool:
+  address: "tarantool:3301"
+  user: "minitoolstream_connector"
+  password: "changeme"
+  timeout: 10s
+
+minio:
+  endpoint: "minio:9000"
+  access_key_id: "minioadmin"
+  secret_access_key: "minioadmin"
+  use_ssl: false
+  bucket_name: "minitoolstream"
+
+vault:
+  enabled: true
+  address: "http://vault:8200"
+  token: "dev-root-token"
+
+auth:
+  enabled: true
+  jwt_vault_path: "secret/data/minitoolstream/jwt"
+  jwt_issuer: "minitoolstream"
+  require_auth: false
+
+logger:
+  level: "info"
+  format: "json"
+  output_path: "stdout"

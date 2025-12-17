@@ -1,0 +1,43 @@
+# Quick test configuration (100 messages for rapid testing)
+
+# Server connection
+server:
+  address: "localhost:50051"
+  timeout: "30s"
+
+# Test parameters
+test:
+  name: "quick-test"
+  message_size: 10240  # 10KB in bytes
+  total_messages: 100  # Only 100 messages for quick test
+  num_producers: 5
+  num_consumers: 2
+  target_rps: 100      # Lower RPS for quick test
+  duration: "2m"       # Shorter duration
+  warmup: "5s"         # Short warmup
+
+# Subject/Topic
+subject: "benchmark.quick.test"
+
+# Monitoring
+monitoring:
+  enabled: true
+  interval: "5s"
+  containers:
+    - "minitoolstream_connector-tarantool"
+    - "minitoolstream_connector-minio"
+
+# Prometheus
+prometheus:
+  enabled: true
+  pushgateway_url: "http://localhost:9091"
+  push_interval: "5s"
+  instance: "quick-test-1"
+
+# Output
+output:
+  results_dir: "../../results/minitoolstream"
+  filename_prefix: "quick-test"
+  print_summary: true
+  save_json: true
+  save_csv: false

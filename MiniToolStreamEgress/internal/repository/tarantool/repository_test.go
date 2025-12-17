@@ -2,7 +2,6 @@ package tarantool
 
 import (
 	"testing"
-	"time"
 
 	"github.com/moroshma/MiniToolStream/MiniToolStreamEgress/pkg/logger"
 )
@@ -147,10 +146,6 @@ func TestToString(t *testing.T) {
 
 func TestRepository_Ping_Closed(t *testing.T) {
 	log, _ := logger.New(logger.Config{Level: "debug", Format: "json", OutputPath: "stdout"})
-	cfg := &Config{
-		Address: "localhost:3301",
-		Timeout: 5 * time.Second,
-	}
 
 	repo := &Repository{
 		logger: log,

@@ -1,0 +1,183 @@
+{
+  "dashboard": {
+    "title": "MiniToolStream vs Kafka Benchmark Comparison",
+    "tags": ["benchmark", "comparison"],
+    "timezone": "browser",
+    "schemaVersion": 16,
+    "version": 1,
+    "refresh": "5s",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Throughput: Messages/sec",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(benchmark_messages_total{system=\"minitoolstream\"}[1m])",
+            "legendFormat": "MiniToolStream",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(benchmark_messages_total{system=\"kafka\"}[1m])",
+            "legendFormat": "Kafka",
+            "refId": "B"
+          }
+        ],
+        "yaxes": [
+          {"label": "msg/s", "format": "short"},
+          {"format": "short", "show": false}
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Throughput: MB/sec",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(benchmark_bytes_total{system=\"minitoolstream\"}[1m]) / 1024 / 1024",
+            "legendFormat": "MiniToolStream",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(benchmark_bytes_total{system=\"kafka\"}[1m]) / 1024 / 1024",
+            "legendFormat": "Kafka",
+            "refId": "B"
+          }
+        ],
+        "yaxes": [
+          {"label": "MB/s", "format": "short"},
+          {"format": "short", "show": false}
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Latency: P95 (ms)",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(benchmark_latency_bucket{system=\"minitoolstream\"}[1m])) / 1000000",
+            "legendFormat": "MiniToolStream P95",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(benchmark_latency_bucket{system=\"kafka\"}[1m])) / 1000000",
+            "legendFormat": "Kafka P95",
+            "refId": "B"
+          }
+        ],
+        "yaxes": [
+          {"label": "ms", "format": "short"},
+          {"format": "short", "show": false}
+        ]
+      },
+      {
+        "id": 4,
+        "title": "Latency: P99 (ms)",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.99, rate(benchmark_latency_bucket{system=\"minitoolstream\"}[1m])) / 1000000",
+            "legendFormat": "MiniToolStream P99",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.99, rate(benchmark_latency_bucket{system=\"kafka\"}[1m])) / 1000000",
+            "legendFormat": "Kafka P99",
+            "refId": "B"
+          }
+        ],
+        "yaxes": [
+          {"label": "ms", "format": "short"},
+          {"format": "short", "show": false}
+        ]
+      },
+      {
+        "id": 5,
+        "title": "CPU Usage (System)",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 16, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "(1 - avg(rate(node_cpu_seconds_total{mode=\"idle\"}[1m]))) * 100",
+            "legendFormat": "System CPU",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"label": "%", "format": "percent", "max": 100},
+          {"format": "short", "show": false}
+        ]
+      },
+      {
+        "id": 6,
+        "title": "Memory Usage (System)",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 16, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "(node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / 1024 / 1024",
+            "legendFormat": "Used Memory (MB)",
+            "refId": "A"
+          },
+          {
+            "expr": "node_memory_MemTotal_bytes / 1024 / 1024",
+            "legendFormat": "Total Memory (MB)",
+            "refId": "B"
+          }
+        ],
+        "yaxes": [
+          {"label": "MB", "format": "short"},
+          {"format": "short", "show": false}
+        ]
+      },
+      {
+        "id": 7,
+        "title": "Error Rate",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 24, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(benchmark_errors_total{system=\"minitoolstream\"}[1m])",
+            "legendFormat": "MiniToolStream",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(benchmark_errors_total{system=\"kafka\"}[1m])",
+            "legendFormat": "Kafka",
+            "refId": "B"
+          }
+        ],
+        "yaxes": [
+          {"label": "errors/s", "format": "short"},
+          {"format": "short", "show": false}
+        ]
+      },
+      {
+        "id": 8,
+        "title": "Network I/O",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 24, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(container_network_transmit_bytes_total{name=~\".*tarantool.*|.*minio.*\"}[1m])) / 1024 / 1024",
+            "legendFormat": "MiniToolStream TX",
+            "refId": "A"
+          },
+          {
+            "expr": "sum(rate(container_network_transmit_bytes_total{name=~\".*kafka.*|.*zookeeper.*\"}[1m])) / 1024 / 1024",
+            "legendFormat": "Kafka TX",
+            "refId": "B"
+          }
+        ],
+        "yaxes": [
+          {"label": "MB/s", "format": "short"},
+          {"format": "short", "show": false}
+        ]
+      }
+    ]
+  }
+}

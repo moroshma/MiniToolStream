@@ -1,0 +1,115 @@
+=== RUN   TestAuthJWTValidation
+
+================================================================================
+ИНТЕГРАЦИОННЫЙ ТЕСТ 1: JWT VALIDATION (Проверка валидации токенов)
+================================================================================
+    auth_test.go:50: JWT manager не доступен: failed to read from Vault: Get "http://localhost:8200/v1/secret/data/minitoolstream/jwt": dial tcp [::1]:8200: connect: connection refused (тест пропущен)
+--- SKIP: TestAuthJWTValidation (3.12s)
+=== RUN   TestAuthPermissions
+
+================================================================================
+ИНТЕГРАЦИОННЫЙ ТЕСТ 2: PERMISSIONS (Проверка прав доступа)
+================================================================================
+    auth_test.go:233: JWT manager не доступен: failed to read from Vault: Get "http://localhost:8200/v1/secret/data/minitoolstream/jwt": dial tcp [::1]:8200: connect: connection refused (тест пропущен)
+--- SKIP: TestAuthPermissions (3.20s)
+=== RUN   TestErrorScenarios_ConnectionFailure
+
+================================================================================
+ИНТЕГРАЦИОННЫЙ ТЕСТ 3: CONNECTION FAILURES (Ошибки подключения)
+================================================================================
+=== RUN   TestErrorScenarios_ConnectionFailure/Invalid_Server_Address
+
+▶ Подтест 3.1: Подключение к несуществующему серверу
+  ✓ УСПЕХ: Подключение к несуществующему серверу failed: context deadline exceeded
+=== RUN   TestErrorScenarios_ConnectionFailure/Connection_Timeout
+
+▶ Подтест 3.2: Таймаут подключения
+  ✓ УСПЕХ: Подключение завершилось с таймаутом: context deadline exceeded
+--- PASS: TestErrorScenarios_ConnectionFailure (2.10s)
+    --- PASS: TestErrorScenarios_ConnectionFailure/Invalid_Server_Address (2.00s)
+    --- PASS: TestErrorScenarios_ConnectionFailure/Connection_Timeout (0.10s)
+=== RUN   TestErrorScenarios_InvalidRequests
+
+================================================================================
+ИНТЕГРАЦИОННЫЙ ТЕСТ 4: INVALID REQUESTS (Невалидные запросы)
+================================================================================
+=== RUN   TestErrorScenarios_InvalidRequests/Empty_Subject
+
+▶ Подтест 4.1: Публикация с пустым subject
+  ✓ УСПЕХ: Запрос обработан с ошибкой: subject cannot be empty (status_code=1)
+=== RUN   TestErrorScenarios_InvalidRequests/Nil_Request
+
+▶ Подтест 4.2: Nil request
+    error_scenarios_test.go:115:   ✗ ОШИБКА: Nil request должен был быть отклонен
+=== RUN   TestErrorScenarios_InvalidRequests/Large_Subject_Name
+
+▶ Подтест 4.3: Очень длинное имя subject
+  ✓ Запрос обработан с ошибкой: failed to get next sequence: failed to get next sequence: using closed connection (0x4001)
+--- FAIL: TestErrorScenarios_InvalidRequests (0.02s)
+    --- PASS: TestErrorScenarios_InvalidRequests/Empty_Subject (0.02s)
+    --- FAIL: TestErrorScenarios_InvalidRequests/Nil_Request (0.00s)
+    --- PASS: TestErrorScenarios_InvalidRequests/Large_Subject_Name (0.00s)
+=== RUN   TestErrorScenarios_EgressErrors
+
+================================================================================
+ИНТЕГРАЦИОННЫЙ ТЕСТ 5: EGRESS ERRORS (Ошибки при чтении сообщений)
+================================================================================
+=== RUN   TestErrorScenarios_EgressErrors/Subscribe_Empty_Subject
+
+▶ Подтест 5.1: Subscribe с пустым subject
+  ✓ УСПЕХ: Stream завершился с ошибкой: rpc error: code = Unknown desc = subject cannot be empty
+=== RUN   TestErrorScenarios_EgressErrors/Subscribe_Empty_DurableName
+
+▶ Подтест 5.2: Subscribe с пустым durable_name
+  ✓ УСПЕХ: Stream завершился с ошибкой: rpc error: code = Unknown desc = durable_name cannot be empty
+=== RUN   TestErrorScenarios_EgressErrors/Fetch_Empty_Subject
+
+▶ Подтест 5.3: Fetch с пустым subject
+  ✓ УСПЕХ: Stream завершился с ошибкой: rpc error: code = Unknown desc = subject cannot be empty
+=== RUN   TestErrorScenarios_EgressErrors/GetLastSequence_Empty_Subject
+
+▶ Подтест 5.4: GetLastSequence с пустым subject
+  ✓ УСПЕХ: GetLastSequence отклонен: rpc error: code = Unknown desc = subject cannot be empty
+=== RUN   TestErrorScenarios_EgressErrors/GetLastSequence_Nonexistent_Subject
+
+▶ Подтест 5.5: GetLastSequence для несуществующего subject
+  ✓ Запрос завершился с ошибкой: rpc error: code = Unknown desc = failed to get last sequence: failed to get latest sequence: failed to get latest sequence: using closed connection (0x4001)
+--- PASS: TestErrorScenarios_EgressErrors (0.02s)
+    --- PASS: TestErrorScenarios_EgressErrors/Subscribe_Empty_Subject (0.02s)
+    --- PASS: TestErrorScenarios_EgressErrors/Subscribe_Empty_DurableName (0.00s)
+    --- PASS: TestErrorScenarios_EgressErrors/Fetch_Empty_Subject (0.00s)
+    --- PASS: TestErrorScenarios_EgressErrors/GetLastSequence_Empty_Subject (0.00s)
+    --- PASS: TestErrorScenarios_EgressErrors/GetLastSequence_Nonexistent_Subject (0.00s)
+=== RUN   TestErrorScenarios_DataValidation
+
+================================================================================
+ИНТЕГРАЦИОННЫЙ ТЕСТ 6: DATA VALIDATION (Валидация данных)
+================================================================================
+=== RUN   TestErrorScenarios_DataValidation/Empty_Data
+
+▶ Подтест 6.1: Публикация с пустыми данными
+  ℹ Запрос обработан с ошибкой: failed to get next sequence: failed to get next sequence: using closed connection (0x4001)
+=== RUN   TestErrorScenarios_DataValidation/Nil_Data
+
+▶ Подтест 6.2: Публикация с nil данными
+  ℹ Запрос обработан с ошибкой: failed to get next sequence: failed to get next sequence: using closed connection (0x4001)
+=== RUN   TestErrorScenarios_DataValidation/Large_Message
+
+▶ Подтест 6.3: Публикация большого сообщения (10 MB)
+  ✓ Создано сообщение размером 10485760 байт
+  ℹ Запрос обработан с ошибкой: failed to get next sequence: failed to get next sequence: using closed connection (0x4001)
+=== RUN   TestErrorScenarios_DataValidation/Special_Characters_In_Subject
+
+▶ Подтест 6.4: Subject с специальными символами
+  ℹ Subject 'test.subject-with-dash' обработан с ошибкой: failed to get next sequence: failed to get next sequence: using closed connection (0x4001)
+  ℹ Subject 'test.subject_with_underscore' обработан с ошибкой: failed to get next sequence: failed to get next sequence: using closed connection (0x4001)
+  ℹ Subject 'test.subject.with.dots' обработан с ошибкой: failed to get next sequence: failed to get next sequence: using closed connection (0x4001)
+  ℹ Subject 'test/subject/with/slashes' обработан с ошибкой: failed to get next sequence: failed to get next sequence: using closed connection (0x4001)
+--- PASS: TestErrorScenarios_DataValidation (0.02s)
+    --- PASS: TestErrorScenarios_DataValidation/Empty_Data (0.00s)
+    --- PASS: TestErrorScenarios_DataValidation/Nil_Data (0.00s)
+    --- PASS: TestErrorScenarios_DataValidation/Large_Message (0.02s)
+    --- PASS: TestErrorScenarios_DataValidation/Special_Characters_In_Subject (0.00s)
+FAIL
+exit status 1
+FAIL	github.com/moroshma/MiniToolStream/tests/integration	9.136s

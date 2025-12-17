@@ -13,8 +13,10 @@ import (
 
 	vault "github.com/hashicorp/vault/api"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/reflection"
+	"google.golang.org/grpc/status"
 
 	"github.com/moroshma/MiniToolStream/MiniToolStreamIngress/internal/config"
 	grpcHandler "github.com/moroshma/MiniToolStream/MiniToolStreamIngress/internal/delivery/grpc"
@@ -155,8 +157,8 @@ func main() {
 
 	// Initialize JWT authentication if enabled
 	var grpcServer *grpc.Server
-	// Set max message size to 256MB (for large file transfers)
-	maxMsgSize := 256 * 1024 * 1024 // 256MB
+	// Set max message size to 1GB (for large file transfers)
+	maxMsgSize := 1024 * 1024 * 1024 // 1GB
 
 	if cfg.Auth.Enabled {
 		appLogger.Info("JWT authentication enabled",
@@ -246,7 +248,11 @@ func conditionalAuthInterceptor(jwtManager *auth.JWTManager, requireAuth bool) g
 		handler grpc.UnaryHandler,
 	) (interface{}, error) {
 		// Try to get token from metadata
-		claims, _ := tryAuthenticate(ctx, jwtManager)
+		claims, err := tryAuthenticate(ctx, jwtManager)
+		if err != nil {
+			// Token was provided but invalid - reject the request
+			return nil, err
+		}
 		if claims != nil {
 			ctx = context.WithValue(ctx, auth.ClaimsContextKey{}, claims)
 		}
@@ -272,5 +278,10 @@ func tryAuthenticate(ctx context.Context, jwtManager *auth.JWTManager) (*auth.Cl
 	}
 
 	token = strings.TrimPrefix(token, "Bearer ")
-	return jwtManager.ValidateToken(token)
+	claims, err := jwtManager.ValidateToken(token)
+	if err != nil {
+		// Token was provided but invalid - return the error
+		return nil, status.Error(codes.Unauthenticated, err.Error())
+	}
+	return claims, nil
 }

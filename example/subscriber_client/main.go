@@ -15,6 +15,7 @@ var (
 	durableName = flag.String("durable", "multi-subscriber", "Durable consumer name")
 	outputDir   = flag.String("output", "./downloads", "Directory to save downloaded files")
 	batchSize   = flag.Int("batch", 10, "Batch size for fetching messages")
+	jwtToken    = flag.String("jwt", "", "JWT token for authentication (optional)")
 )
 
 func main() {
@@ -24,12 +25,21 @@ func main() {
 	log.Printf("Connecting to: %s", *serverAddr)
 	log.Printf("Durable Name: %s", *durableName)
 	log.Printf("Output Directory: %s", *outputDir)
+	if *jwtToken != "" {
+		log.Printf("JWT Authentication: enabled")
+	}
 
 	// Create subscriber using the library
-	sub, err := minitoolstream_connector.NewSubscriberBuilder(*serverAddr).
+	builder := minitoolstream_connector.NewSubscriberBuilder(*serverAddr).
 		WithDurableName(*durableName).
-		WithBatchSize(int32(*batchSize)).
-		Build()
+		WithBatchSize(int32(*batchSize))
+
+	// Add JWT token if provided
+	if *jwtToken != "" {
+		builder = builder.WithJWTToken(*jwtToken)
+	}
+
+	sub, err := builder.Build()
 	if err != nil {
 		log.Fatalf("Failed to create subscriber: %v", err)
 	}

@@ -21,6 +21,10 @@ type ClientConfig struct {
 	ServerAddress string        `yaml:"server_address" envconfig:"CLIENT_SERVER_ADDRESS" default:"localhost:50051"`
 	Timeout       time.Duration `yaml:"timeout" envconfig:"CLIENT_TIMEOUT" default:"10s"`
 
+	// Authentication
+	JWTToken     string `yaml:"jwt_token" envconfig:"JWT_TOKEN"`      // JWT token for authentication
+	JWTVaultPath string `yaml:"jwt_vault_path" envconfig:"JWT_VAULT_PATH"` // Path to JWT token in Vault
+
 	// Publishing defaults
 	DefaultSubject     string `yaml:"default_subject" envconfig:"CLIENT_DEFAULT_SUBJECT"`
 	DefaultContentType string `yaml:"default_content_type" envconfig:"CLIENT_DEFAULT_CONTENT_TYPE" default:"text/plain"`

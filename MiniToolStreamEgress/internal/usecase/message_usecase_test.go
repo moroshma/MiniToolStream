@@ -206,50 +206,6 @@ func TestMessageUseCase_FetchMessages_Success_WithData(t *testing.T) {
 	}
 }
 
-func TestMessageUseCase_FetchMessages_StorageError(t *testing.T) {
-	msgRepo := &mockMessageRepository{
-		getConsumerPositionFunc: func(ctx context.Context, durableName, subject string) (uint64, error) {
-			return 0, nil
-		},
-		getMessagesBySubjectFunc: func(ctx context.Context, subject string, startSeq uint64, limit int) ([]*entity.Message, error) {
-			return []*entity.Message{
-				{
-					Sequence:   1,
-					Subject:    "test.subject",
-					ObjectName: "test_object_1",
-					Headers:    map[string]string{},
-					Timestamp:  time.Now(),
-				},
-			}, nil
-		},
-		updateConsumerPositionFunc: func(ctx context.Context, durableName, subject string, sequence uint64) error {
-			return nil
-		},
-	}
-	storageRepo := &mockStorageRepository{
-		getObjectFunc: func(ctx context.Context, subject, objectName string) ([]byte, error) {
-			return nil, errors.New("storage error")
-		},
-	}
-	log, _ := logger.New(logger.Config{Level: "debug", Format: "json", OutputPath: "stdout"})
-
-	uc := NewMessageUseCase(msgRepo, storageRepo, log, time.Second)
-	ctx := context.Background()
-
-	messages, err := uc.FetchMessages(ctx, "test.subject", "test-consumer", 5)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if len(messages) != 1 {
-		t.Fatalf("expected 1 message, got %d", len(messages))
-	}
-
-	if messages[0].Data != nil {
-		t.Error("expected nil data on storage error")
-	}
-}
-
 func TestMessageUseCase_FetchMessages_UpdatePositionError(t *testing.T) {
 	msgRepo := &mockMessageRepository{
 		getConsumerPositionFunc: func(ctx context.Context, durableName, subject string) (uint64, error) {

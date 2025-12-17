@@ -1,0 +1,39 @@
+{
+  "system": "kafka",
+  "test_name": "large-files-chunked",
+  "timestamp": "2025-12-12T00:13:36.533618+03:00",
+  "config": {
+    "message_size_bytes": 10485760,
+    "num_producers": 3,
+    "num_consumers": 1,
+    "total_messages": 0,
+    "target_rps": 0
+  },
+  "throughput": {
+    "total_messages": 0,
+    "total_bytes": 0,
+    "msg_per_sec": 0,
+    "mb_per_sec": 0
+  },
+  "latency": {
+    "p50_ms": 0,
+    "p95_ms": 0,
+    "p99_ms": 0,
+    "min_ms": 0,
+    "max_ms": 0,
+    "avg_ms": 0
+  },
+  "resources": {
+    "cpu_percent": 0,
+    "memory_mb": 0,
+    "disk_write_mb": 0,
+    "disk_read_mb": 0,
+    "network_tx_mb": 0,
+    "network_rx_mb": 0
+  },
+  "errors": {
+    "error_count": 0,
+    "error_rate": 0
+  },
+  "duration": 9037416
+}

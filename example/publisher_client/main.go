@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 
+	vault "github.com/hashicorp/vault/api"
 	"github.com/moroshma/MiniToolStream/example/publisher_client/internal/config"
 	"github.com/moroshma/MiniToolStreamConnector/minitoolstream_connector"
 )
@@ -48,10 +49,27 @@ func main() {
 			log.Fatalf("Failed to apply Vault secrets: %v", err)
 		}
 		log.Printf("✓ Vault secrets applied")
+
+		// Load JWT token from Vault if path is configured
+		if cfg.Client.JWTVaultPath != "" {
+			jwtToken, err := loadJWTFromVault(ctx, vaultClient, cfg.Client.JWTVaultPath)
+			if err != nil {
+				log.Printf("Warning: Failed to load JWT token from Vault: %v", err)
+			} else {
+				cfg.Client.JWTToken = jwtToken
+				log.Printf("✓ JWT token loaded from Vault")
+			}
+		}
 	}
 
-	// Create publisher using the library
-	pub, err := minitoolstream_connector.NewPublisher(cfg.Client.ServerAddress)
+	// Create publisher using the library with JWT support
+	pubBuilder := minitoolstream_connector.NewPublisherBuilder(cfg.Client.ServerAddress)
+	if cfg.Client.JWTToken != "" {
+		pubBuilder = pubBuilder.WithJWTToken(cfg.Client.JWTToken)
+		log.Printf("✓ JWT authentication enabled")
+	}
+
+	pub, err := pubBuilder.Build()
 	if err != nil {
 		log.Fatalf("Failed to create publisher: %v", err)
 	}
@@ -182,4 +200,30 @@ Configuration:
 
 func init() {
 	flag.Usage = printUsage
+}
+
+// loadJWTFromVault loads JWT token from Vault
+func loadJWTFromVault(ctx context.Context, vaultClient *vault.Client, path string) (string, error) {
+	secret, err := vaultClient.Logical().ReadWithContext(ctx, path)
+	if err != nil {
+		return "", fmt.Errorf("failed to read from Vault: %w", err)
+	}
+
+	if secret == nil || secret.Data == nil {
+		return "", fmt.Errorf("no data found at path %s", path)
+	}
+
+	// Try to get token from data.token or data.data.token (KV v2)
+	var token string
+	if data, ok := secret.Data["data"].(map[string]interface{}); ok {
+		token, _ = data["token"].(string)
+	} else {
+		token, _ = secret.Data["token"].(string)
+	}
+
+	if token == "" {
+		return "", fmt.Errorf("token not found in Vault secret")
+	}
+
+	return token, nil
 }

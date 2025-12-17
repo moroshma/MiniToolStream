@@ -15,8 +15,15 @@ minio:
   bucket_name: "minitoolstream"
 
 vault:
-  enabled: false
+  enabled: true
   address: "http://vault:8200"
+  token: "dev-root-token"
+
+auth:
+  enabled: true
+  jwt_vault_path: "secret/data/minitoolstream/jwt"
+  jwt_issuer: "minitoolstream"
+  require_auth: false
 
 logger:
   level: "info"

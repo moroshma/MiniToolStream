@@ -1,0 +1,50 @@
+# Benchmark configuration for Kafka - small files (10KB)
+
+# Kafka connection
+kafka:
+  brokers:
+    - "localhost:9092"
+  topic: "benchmark-small-files"
+  producer:
+    compression: "snappy"  # none, gzip, snappy, lz4, zstd
+    max_message_bytes: 10485760  # 10MB
+    required_acks: 1  # 0=NoResponse, 1=WaitForLocal, -1=WaitForAll
+    timeout: "30s"
+  consumer:
+    group_id: "benchmark-consumer-group"
+    session_timeout: "10s"
+    heartbeat_interval: "3s"
+
+# Test parameters
+test:
+  name: "small-files-10kb"
+  message_size: 10240  # 10KB in bytes
+  total_messages: 10000
+  num_producers: 10
+  num_consumers: 5
+  target_rps: 1000
+  duration: "5m"
+  warmup: "10s"
+
+# Monitoring
+monitoring:
+  enabled: true
+  interval: "5s"
+  containers:
+    - "benchmark-kafka"
+    - "benchmark-zookeeper"
+
+# Prometheus
+prometheus:
+  enabled: true
+  pushgateway_url: "http://localhost:9091"
+  push_interval: "5s"
+  instance: "benchmark-1"
+
+# Output
+output:
+  results_dir: "../../results/kafka"
+  filename_prefix: "small-files"
+  print_summary: true
+  save_json: true
+  save_csv: true

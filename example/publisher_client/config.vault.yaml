@@ -8,6 +8,13 @@ client:
   default_content_type: text/plain
   batch_size: 10
 
+  # JWT Authentication
+  # Option 1: Direct token
+  jwt_token: ""  # Paste your JWT token here or set via JWT_TOKEN env var
+
+  # Option 2: Load token from Vault
+  # jwt_vault_path: "secret/data/minitoolstream/tokens/my-publisher"
+
 vault:
   enabled: true
   address: http://localhost:8200

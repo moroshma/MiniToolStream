@@ -1,0 +1,43 @@
+# Benchmark configuration for large files (1GB)
+
+# Server connection
+server:
+  address: "localhost:50051"
+  timeout: "600s"  # 10 minutes for large files
+
+# Test parameters
+test:
+  name: "large-files-1gb"
+  message_size: 1073741824  # 1GB in bytes
+  total_messages: 10
+  num_producers: 3
+  num_consumers: 1
+  target_rps: 0  # No rate limiting for large files
+  duration: "30m"
+  warmup: "0s"  # No warmup for large files
+
+# Subject/Topic
+subject: "benchmark.large.files"
+
+# Monitoring
+monitoring:
+  enabled: true
+  interval: "10s"
+  containers:
+    - "minitoolstream_connector-tarantool"
+    - "minitoolstream_connector-minio"
+
+# Prometheus
+prometheus:
+  enabled: true
+  pushgateway_url: "http://localhost:9091"
+  push_interval: "10s"
+  instance: "benchmark-1"
+
+# Output
+output:
+  results_dir: "../../results/minitoolstream"
+  filename_prefix: "large-files"
+  print_summary: true
+  save_json: true
+  save_csv: true

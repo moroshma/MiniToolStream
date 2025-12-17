@@ -1,0 +1,50 @@
+# Benchmark configuration for Kafka - medium files (10MB messages)
+
+# Kafka connection
+kafka:
+  brokers:
+    - "localhost:9092"
+  topic: "benchmark-medium-files"
+  producer:
+    compression: "snappy"
+    max_message_bytes: 104857600  # 100MB
+    required_acks: 1
+    timeout: "300s"
+  consumer:
+    group_id: "benchmark-consumer-group-medium"
+    session_timeout: "30s"
+    heartbeat_interval: "3s"
+
+# Test parameters
+test:
+  name: "medium-files-10mb"
+  message_size: 10485760  # 10MB (Kafka practical limit)
+  total_messages: 500  # 500 * 10MB = 5GB total (comparable to 50 * 100MB)
+  num_producers: 5
+  num_consumers: 2
+  target_rps: 0
+  duration: "30m"
+  warmup: "0s"
+
+# Monitoring
+monitoring:
+  enabled: true
+  interval: "10s"
+  containers:
+    - "benchmark-kafka"
+    - "benchmark-zookeeper"
+
+# Prometheus
+prometheus:
+  enabled: true
+  pushgateway_url: "http://localhost:9091"
+  push_interval: "10s"
+  instance: "benchmark-1"
+
+# Output
+output:
+  results_dir: "../../results/kafka"
+  filename_prefix: "medium-files"
+  print_summary: true
+  save_json: true
+  save_csv: true

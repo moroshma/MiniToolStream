@@ -9,7 +9,9 @@ import (
 
 // MessageRepository defines the interface for message storage
 type MessageRepository interface {
-	PublishMessage(subject string, headers map[string]string) (uint64, error)
+	GetNextSequence() (uint64, error)
+	InsertMessage(sequence uint64, subject string, headers map[string]string, objectName string) error
+	PublishMessage(subject string, headers map[string]string) (uint64, error) // legacy
 	Ping() error
 	Close() error
 }
@@ -55,6 +57,11 @@ type PublishResponse struct {
 }
 
 // Publish publishes a message with optional data to storage
+// IMPORTANT: Order of operations to prevent race conditions:
+// 1. Allocate sequence number
+// 2. Upload payload to MinIO (if present)
+// 3. Insert metadata to Tarantool
+// This ensures metadata only appears after payload is available
 func (uc *PublishUseCase) Publish(ctx context.Context, req *PublishRequest) (*PublishResponse, error) {
 	if req == nil {
 		return nil, fmt.Errorf("request cannot be nil")
@@ -69,20 +76,20 @@ func (uc *PublishUseCase) Publish(ctx context.Context, req *PublishRequest) (*Pu
 		logger.Int("data_size", len(req.Data)),
 	)
 
-	// Publish message metadata to Tarantool
-	sequence, err := uc.messageRepo.PublishMessage(req.Subject, req.Headers)
+	// Step 1: Allocate sequence number from Tarantool
+	sequence, err := uc.messageRepo.GetNextSequence()
 	if err != nil {
-		uc.logger.Error("Failed to publish message metadata",
+		uc.logger.Error("Failed to get next sequence",
 			logger.String("subject", req.Subject),
 			logger.Error(err),
 		)
-		return nil, fmt.Errorf("failed to publish message: %w", err)
+		return nil, fmt.Errorf("failed to get next sequence: %w", err)
 	}
 
 	// Generate object name based on subject and sequence
 	objectName := fmt.Sprintf("%s_%d", req.Subject, sequence)
 
-	// Upload data to MinIO if present
+	// Step 2: Upload data to MinIO if present (BEFORE metadata insert)
 	if len(req.Data) > 0 {
 		contentType := "application/octet-stream"
 		if ct, ok := req.Headers["content-type"]; ok {
@@ -97,8 +104,23 @@ func (uc *PublishUseCase) Publish(ctx context.Context, req *PublishRequest) (*Pu
 				logger.String("object_name", objectName),
 				logger.Error(err),
 			)
+			// NOTE: sequence is "burned" here (gap in sequence numbers)
+			// This is acceptable to prevent race condition
 			return nil, fmt.Errorf("failed to upload data: %w", err)
 		}
+	}
+
+	// Step 3: Insert message metadata to Tarantool (AFTER payload is uploaded)
+	err = uc.messageRepo.InsertMessage(sequence, req.Subject, req.Headers, objectName)
+	if err != nil {
+		uc.logger.Error("Failed to insert message metadata",
+			logger.String("subject", req.Subject),
+			logger.Uint64("sequence", sequence),
+			logger.Error(err),
+		)
+		// NOTE: MinIO object exists but metadata is missing
+		// TTL cleanup will eventually remove orphaned objects
+		return nil, fmt.Errorf("failed to insert message metadata: %w", err)
 	}
 
 	uc.logger.Info("Message published successfully",

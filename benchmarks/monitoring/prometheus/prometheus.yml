@@ -1,0 +1,60 @@
+# Prometheus configuration for MiniToolStream vs Kafka benchmarks
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'benchmark-cluster'
+    replica: '1'
+
+# Scrape configs
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Pushgateway for benchmark metrics
+  - job_name: 'pushgateway'
+    honor_labels: true
+    static_configs:
+      - targets: ['pushgateway:9091']
+
+  # Node Exporter for system metrics
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+
+  # cAdvisor for Docker container metrics
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+
+  # MiniToolStream и Kafka метрики приходят через Pushgateway
+  # Прямые endpoints не нужны - закомментированы
+
+  # # MiniToolStream Ingress (если экспортирует метрики)
+  # - job_name: 'minitoolstream-ingress'
+  #   static_configs:
+  #     - targets: ['host.docker.internal:50051']
+  #   metrics_path: '/metrics'
+  #   scrape_interval: 5s
+
+  # # MiniToolStream Egress
+  # - job_name: 'minitoolstream-egress'
+  #   static_configs:
+  #     - targets: ['host.docker.internal:50052']
+  #   metrics_path: '/metrics'
+  #   scrape_interval: 5s
+
+  # # Kafka JMX Exporter (если настроен)
+  # - job_name: 'kafka'
+  #   static_configs:
+  #     - targets: ['benchmark-kafka:9999']
+  #   scrape_interval: 10s
+
+  # # Zookeeper JMX Exporter
+  # - job_name: 'zookeeper'
+  #   static_configs:
+  #     - targets: ['benchmark-zookeeper:9999']
+  #   scrape_interval: 10s

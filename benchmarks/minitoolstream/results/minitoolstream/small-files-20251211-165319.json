@@ -1,0 +1,39 @@
+{
+  "system": "minitoolstream",
+  "test_name": "small-files-10kb",
+  "timestamp": "2025-12-11T16:51:29.156926+03:00",
+  "config": {
+    "message_size_bytes": 10240,
+    "num_producers": 10,
+    "num_consumers": 5,
+    "total_messages": 10000,
+    "target_rps": 1000
+  },
+  "throughput": {
+    "total_messages": 10000,
+    "total_bytes": 102400000,
+    "msg_per_sec": 90.72442896303636,
+    "mb_per_sec": 0.885980751592152
+  },
+  "latency": {
+    "p50_ms": 2902125,
+    "p95_ms": 4472917,
+    "p99_ms": 9344583,
+    "min_ms": 1700792,
+    "max_ms": 328051875,
+    "avg_ms": 3498858
+  },
+  "resources": {
+    "cpu_percent": 15.843809523809526,
+    "memory_mb": 513.5442857142857,
+    "disk_write_mb": 270.23,
+    "disk_read_mb": 133.90000000000003,
+    "network_tx_mb": 14.039047619047617,
+    "network_rx_mb": 174.53619047619048
+  },
+  "errors": {
+    "error_count": 0,
+    "error_rate": 0
+  },
+  "duration": 110223895750
+}

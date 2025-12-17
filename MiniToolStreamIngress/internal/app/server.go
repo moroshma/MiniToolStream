@@ -12,12 +12,12 @@ import (
 // IngressServer implements the gRPC IngressService
 type IngressServer struct {
 	pb.UnimplementedIngressServiceServer
-	tarantoolClient *tarantool.Client
-	minioClient     *minio.Client
+	tarantoolClient *tarantool.Repository
+	minioClient     *minio.Repository
 }
 
 // NewIngressServer creates a new gRPC app instance
-func NewIngressServer(tarantoolClient *tarantool.Client, minioClient *minio.Client) *IngressServer {
+func NewIngressServer(tarantoolClient *tarantool.Repository, minioClient *minio.Repository) *IngressServer {
 	return &IngressServer{
 		tarantoolClient: tarantoolClient,
 		minioClient:     minioClient,
@@ -68,7 +68,7 @@ func (s *IngressServer) Publish(ctx context.Context, req *pb.PublishRequest) (*p
 			contentType = "application/octet-stream"
 		}
 
-		err = s.minioClient.UploadData(ctx, req.Subject, objectName, req.Data, contentType)
+		err = s.minioClient.UploadData(ctx, objectName, req.Data, contentType)
 		if err != nil {
 			return &pb.PublishResponse{
 				Sequence:     sequence,

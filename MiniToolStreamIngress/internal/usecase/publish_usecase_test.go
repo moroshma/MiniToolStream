@@ -9,9 +9,11 @@ import (
 )
 
 type mockMessageRepository struct {
-	publishFunc func(subject string, headers map[string]string) (uint64, error)
-	pingFunc    func() error
-	closeFunc   func() error
+	publishFunc       func(subject string, headers map[string]string) (uint64, error)
+	getNextSeqFunc    func() (uint64, error)
+	insertMessageFunc func(sequence uint64, subject string, headers map[string]string, objectName string) error
+	pingFunc          func() error
+	closeFunc         func() error
 }
 
 func (m *mockMessageRepository) PublishMessage(subject string, headers map[string]string) (uint64, error) {
@@ -19,6 +21,20 @@ func (m *mockMessageRepository) PublishMessage(subject string, headers map[strin
 		return m.publishFunc(subject, headers)
 	}
 	return 0, nil
+}
+
+func (m *mockMessageRepository) GetNextSequence() (uint64, error) {
+	if m.getNextSeqFunc != nil {
+		return m.getNextSeqFunc()
+	}
+	return 0, nil
+}
+
+func (m *mockMessageRepository) InsertMessage(sequence uint64, subject string, headers map[string]string, objectName string) error {
+	if m.insertMessageFunc != nil {
+		return m.insertMessageFunc(sequence, subject, headers, objectName)
+	}
+	return nil
 }
 
 func (m *mockMessageRepository) Ping() error {
@@ -124,7 +140,7 @@ func TestPublishUseCase_Publish_EmptySubject(t *testing.T) {
 
 func TestPublishUseCase_Publish_MessageRepoError(t *testing.T) {
 	msgRepo := &mockMessageRepository{
-		publishFunc: func(subject string, headers map[string]string) (uint64, error) {
+		getNextSeqFunc: func() (uint64, error) {
 			return 0, errors.New("tarantool error")
 		},
 	}
@@ -148,8 +164,11 @@ func TestPublishUseCase_Publish_MessageRepoError(t *testing.T) {
 
 func TestPublishUseCase_Publish_StorageRepoError(t *testing.T) {
 	msgRepo := &mockMessageRepository{
-		publishFunc: func(subject string, headers map[string]string) (uint64, error) {
+		getNextSeqFunc: func() (uint64, error) {
 			return 42, nil
+		},
+		insertMessageFunc: func(sequence uint64, subject string, headers map[string]string, objectName string) error {
+			return nil
 		},
 	}
 	storageRepo := &mockStorageRepository{
@@ -180,8 +199,11 @@ func TestPublishUseCase_Publish_Success_WithData(t *testing.T) {
 	var uploadedContentType string
 
 	msgRepo := &mockMessageRepository{
-		publishFunc: func(subject string, headers map[string]string) (uint64, error) {
+		getNextSeqFunc: func() (uint64, error) {
 			return 123, nil
+		},
+		insertMessageFunc: func(sequence uint64, subject string, headers map[string]string, objectName string) error {
+			return nil
 		},
 	}
 	storageRepo := &mockStorageRepository{
@@ -235,8 +257,11 @@ func TestPublishUseCase_Publish_Success_WithData(t *testing.T) {
 func TestPublishUseCase_Publish_Success_WithoutData(t *testing.T) {
 	uploadCalled := false
 	msgRepo := &mockMessageRepository{
-		publishFunc: func(subject string, headers map[string]string) (uint64, error) {
+		getNextSeqFunc: func() (uint64, error) {
 			return 456, nil
+		},
+		insertMessageFunc: func(sequence uint64, subject string, headers map[string]string, objectName string) error {
+			return nil
 		},
 	}
 	storageRepo := &mockStorageRepository{
@@ -280,8 +305,11 @@ func TestPublishUseCase_Publish_DefaultContentType(t *testing.T) {
 	var uploadedContentType string
 
 	msgRepo := &mockMessageRepository{
-		publishFunc: func(subject string, headers map[string]string) (uint64, error) {
+		getNextSeqFunc: func() (uint64, error) {
 			return 789, nil
+		},
+		insertMessageFunc: func(sequence uint64, subject string, headers map[string]string, objectName string) error {
+			return nil
 		},
 	}
 	storageRepo := &mockStorageRepository{

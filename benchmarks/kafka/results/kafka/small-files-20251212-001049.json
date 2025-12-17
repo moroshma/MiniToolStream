@@ -1,0 +1,39 @@
+{
+  "system": "kafka",
+  "test_name": "small-files-10kb",
+  "timestamp": "2025-12-12T00:08:59.600068+03:00",
+  "config": {
+    "message_size_bytes": 10240,
+    "num_producers": 10,
+    "num_consumers": 5,
+    "total_messages": 10000,
+    "target_rps": 1000
+  },
+  "throughput": {
+    "total_messages": 10000,
+    "total_bytes": 102400000,
+    "msg_per_sec": 90.89835350720257,
+    "mb_per_sec": 0.8876792334687752
+  },
+  "latency": {
+    "p50_ms": 1348500,
+    "p95_ms": 3565250,
+    "p99_ms": 5954500,
+    "min_ms": 400625,
+    "max_ms": 46020208,
+    "avg_ms": 1687823
+  },
+  "resources": {
+    "cpu_percent": 18.342380952380957,
+    "memory_mb": 503.30142857142846,
+    "disk_write_mb": 35.198976934523806,
+    "disk_read_mb": 20.349523809523816,
+    "network_tx_mb": 1.0290299479166667,
+    "network_rx_mb": 50.93889229910714
+  },
+  "errors": {
+    "error_count": 0,
+    "error_rate": 0
+  },
+  "duration": 110012993791
+}

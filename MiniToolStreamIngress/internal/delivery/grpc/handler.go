@@ -30,6 +30,12 @@ func NewIngressHandler(publishUC *usecase.PublishUseCase, log *logger.Logger) *I
 
 // Publish implements the Publish RPC method
 func (h *IngressHandler) Publish(ctx context.Context, req *pb.PublishRequest) (*pb.PublishResponse, error) {
+	// Validate request is not nil
+	if req == nil {
+		h.logger.Warn("Publish request rejected: nil request")
+		return nil, status.Error(codes.InvalidArgument, "request cannot be nil")
+	}
+
 	// Check authorization if claims are present in context
 	if claims, ok := auth.GetClaimsFromContext(ctx); ok {
 		h.logger.Info("Received authenticated Publish request",

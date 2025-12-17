@@ -127,16 +127,15 @@ function get_next_sequence()
     return global_sequence
 end
 
--- Function to publish a message
+-- Function to insert a message with pre-allocated sequence
+-- This allows caller to upload payload to MinIO BEFORE inserting metadata
+-- @param sequence uint64 - pre-allocated sequence number
 -- @param subject string - topic/channel name
 -- @param headers table - map of headers (metadata)
+-- @param object_name string - MinIO object key (already uploaded)
 -- @return sequence number of the published message
-function publish_message(subject, headers)
-    local sequence = get_next_sequence()
+function insert_message(sequence, subject, headers, object_name)
     local create_at = os.time()
-
-    -- Auto-generate object_name as {{subject}}_{{sequence}}
-    local object_name = subject .. "_" .. sequence
 
     -- Normalize headers: convert array to map if needed
     local normalized_headers
@@ -160,6 +159,16 @@ function publish_message(subject, headers)
     })
 
     return sequence
+end
+
+-- Function to publish a message (legacy, for backward compatibility)
+-- @param subject string - topic/channel name
+-- @param headers table - map of headers (metadata)
+-- @return sequence number of the published message
+function publish_message(subject, headers)
+    local sequence = get_next_sequence()
+    local object_name = subject .. "_" .. sequence
+    return insert_message(sequence, subject, headers, object_name)
 end
 
 -- Function to get message by sequence
